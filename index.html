@@ -388,6 +388,10 @@ function filtra(lista){
     return true;
   });
 }
+function produtosDe(c){
+  return c[3].map(p => ({ g: DADOS.grupos[DADOS.pg[p]], p: DADOS.produtos[p] }))
+             .sort((a, b) => a.g.localeCompare(b.g) || a.p.localeCompare(b.p));
+}
 function gruposDe(c){
   const set = [];
   c[3].forEach(p => { const g = DADOS.grupos[DADOS.pg[p]]; if (!set.includes(g)) set.push(g); });
@@ -574,7 +578,8 @@ async function gerarPrint(){
   const P = { tinta:'#13202A', suave:'#5B6D79', fraco:'#8A9BA5', linha:'#DCE4E8',
               fundo:'#FFFFFF', chapa:'#F3F7F8', teal:'#0E6F78',
               bom:'#2C7A4E', alerta:'#9E5E12', ruim:'#A33B32' };
-  const W = 1080, pad = 56, linhaH = 46, LIM = 20;
+  const W = 1080, pad = 56, LIM = 15;
+  const altBloco = (c) => 40 + c[3].length * 24;
   const { base, c2, c1, c3 } = oportunidades();
   const m3 = c3.length, m2 = c2.length, m1 = c1.length;
   const pct = base.length ? Math.round(m3 / base.length * 100) : 0;
@@ -582,7 +587,8 @@ async function gerarPrint(){
   if (m2) secs.push(['FALTA 1 SKU  ·  clientes com 2 SKUs', m2, c2.slice(0, LIM), P.alerta]);
   if (m1) secs.push(['FALTAM 2 SKUs  ·  clientes com 1 SKU', m1, c1.slice(0, LIM), P.ruim]);
   if (!secs.length) secs.push(['TODOS OS CLIENTES ATINGIRAM A META', 0, [], P.bom]);
-  const H = 432 + secs.reduce((a, s) => a + 85 + s[2].length * linhaH + (s[1] > s[2].length ? 32 : 0), 0);
+  const H = 432 + secs.reduce((a, s) =>
+    a + 85 + s[2].reduce((t, c) => t + altBloco(c), 0) + (s[1] > s[2].length ? 32 : 0), 0);
 
   const cv = document.createElement('canvas');
   cv.width = W; cv.height = H;
@@ -651,20 +657,28 @@ async function gerarPrint(){
     x.beginPath(); x.moveTo(pad, y + 6); x.lineTo(W - pad, y + 6); x.stroke();
     y += 30;
 
+    let by = y - 8;
     arr.forEach((c, i) => {
-      const ly = y + i * linhaH;
-      if (i % 2 === 0){ x.fillStyle = P.chapa; x.fillRect(pad - 10, ly - 20, W - pad * 2 + 20, linhaH); }
-      box(pad, ly - 13, 46, 30, 8, cor + '22', null);
-      x.fillStyle = cor; x.font = F('700', 19, AR); x.textAlign = 'center';
-      x.fillText(String(c[2]), pad + 23, ly + 8); x.textAlign = 'left';
+      const h = altBloco(c);
+      if (i % 2 === 0){ x.fillStyle = P.chapa; x.fillRect(pad - 10, by, W - pad * 2 + 20, h); }
+      const base = by + 26;
+      box(pad, by + 6, 46, 28, 8, cor + '22', null);
+      x.fillStyle = cor; x.font = F('700', 18, AR); x.textAlign = 'center';
+      x.fillText(String(c[2]), pad + 23, base); x.textAlign = 'left';
       x.fillStyle = P.fraco; x.font = F('400', 15);
-      x.fillText(c[0], pad + 62, ly + 7);
-      x.fillStyle = P.tinta; x.font = F('500', 19);
-      x.fillText(corta(c[1], 400, F('500', 19)), pad + 152, ly + 7);
-      x.fillStyle = P.fraco; x.font = F('400', 16);
-      x.fillText(corta('já compra: ' + gruposDe(c).join(' · '), W - pad - 620, F('400', 16)), 620, ly + 7);
+      x.fillText(c[0], pad + 62, base);
+      x.fillStyle = P.tinta; x.font = F('500', 18);
+      x.fillText(corta(c[1], W - pad * 2 - 152, F('500', 18)), pad + 152, base);
+      produtosDe(c).forEach((it, k) => {
+        const ly = base + 26 + k * 24;
+        x.fillStyle = cor; x.font = F('600', 14, AR);
+        x.fillText('•', pad + 64, ly);
+        x.fillStyle = P.suave; x.font = F('400', 15);
+        x.fillText(corta(it.g + ' · ' + it.p, W - pad - (pad + 84), F('400', 15)), pad + 84, ly);
+      });
+      by += h;
     });
-    y += arr.length * linhaH + 12;
+    y = by + 12;
     if (total > arr.length){
       x.fillStyle = P.suave; x.font = F('400', 16);
       x.fillText(`+ ${total - arr.length} clientes na planilha completa`, pad, y + 16);
@@ -681,15 +695,19 @@ async function gerarPrint(){
   return { filename: nomeArquivo('png').replace('.png', '_Oportunidades.png'), blob };
 }
 
-const LIM_MSG = 25;
+const LIM_MSG = 12;
 function mensagem(comAnexo){
   const { vendedor } = contexto();
   const { base, c2, c1, c3 } = oportunidades();
   const bloco = (titulo, arr) => {
     if (!arr.length) return [];
     const mostra = arr.slice(0, LIM_MSG);
-    return ['', `*${titulo} (${arr.length}):*`,
-      ...mostra.map(c => `• ${c[0]} ${c[1]} — ${gruposDe(c).join(', ')}`),
+    const linhasCli = [];
+    mostra.forEach(c => {
+      linhasCli.push(`*${c[0]} ${c[1]}*`);
+      produtosDe(c).forEach(it => linhasCli.push(`   ${it.p}`));
+    });
+    return ['', `*${titulo} (${arr.length})* — itens que já compra:`, ...linhasCli,
       arr.length > mostra.length ? `… e mais ${arr.length - mostra.length} clientes no anexo.` : ''];
   };
   return [
