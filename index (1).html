@@ -1,0 +1,788 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Cobertura de SKUs por Cliente</title>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+  :root{
+    --bg:#EEF1F3; --surface:#FFFFFF; --surface-2:#F6F9FA; --surface-3:#EDF2F4;
+    --ink:#13202A; --ink-2:#4E606C; --ink-3:#7A8B96;
+    --line:#DAE2E6; --line-2:#C6D2D8;
+    --accent:#0E6F78; --accent-ink:#0A565D; --accent-soft:#DAEBED;
+    --good:#2C7A4E; --good-soft:#DFEFE5;
+    --warn:#9E5E12; --warn-soft:#F7E8D4;
+    --alert:#A33B32; --alert-soft:#F6E2DF;
+    --shadow:0 1px 2px rgba(19,32,42,.06), 0 8px 24px -16px rgba(19,32,42,.25);
+    --radius:10px;
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --bg:#0D1418; --surface:#172127; --surface-2:#1C272E; --surface-3:#233038;
+      --ink:#E7EEF1; --ink-2:#9BAFB9; --ink-3:#78909C;
+      --line:#26343C; --line-2:#33444E;
+      --accent:#4FC2C7; --accent-ink:#8BDDE0; --accent-soft:#13333A;
+      --good:#6FBE8C; --good-soft:#14301F;
+      --warn:#DFA55F; --warn-soft:#33240F;
+      --alert:#E88B80; --alert-soft:#341A17;
+      --shadow:0 1px 2px rgba(0,0,0,.4), 0 8px 24px -16px rgba(0,0,0,.8);
+    }
+  }
+  :root[data-theme="dark"]{
+    --bg:#0D1418; --surface:#172127; --surface-2:#1C272E; --surface-3:#233038;
+    --ink:#E7EEF1; --ink-2:#9BAFB9; --ink-3:#78909C;
+    --line:#26343C; --line-2:#33444E;
+    --accent:#4FC2C7; --accent-ink:#8BDDE0; --accent-soft:#13333A;
+    --good:#6FBE8C; --good-soft:#14301F;
+    --warn:#DFA55F; --warn-soft:#33240F;
+    --alert:#E88B80; --alert-soft:#341A17;
+    --shadow:0 1px 2px rgba(0,0,0,.4), 0 8px 24px -16px rgba(0,0,0,.8);
+  }
+
+  *{box-sizing:border-box}
+  [hidden]{display:none!important}
+  body{
+    margin:0; background:var(--bg); color:var(--ink);
+    font-family:"IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+    font-size:14px; line-height:1.5; -webkit-font-smoothing:antialiased;
+  }
+  .wrap{max-width:1180px; margin:0 auto; padding-inline:16px; padding-block:0 48px}
+
+  /* ---------- header ---------- */
+  header.top{
+    position:sticky; top:env(safe-area-inset-top, 0px); z-index:30;
+    background:color-mix(in srgb, var(--bg) 88%, transparent);
+    backdrop-filter:saturate(140%) blur(8px);
+    border-bottom:1px solid var(--line);
+  }
+  .top-in{max-width:1180px; margin:0 auto; padding-inline:16px; padding-block:14px 12px;
+    display:flex; flex-wrap:wrap; gap:14px 20px; align-items:flex-end}
+  .brand{display:flex; flex-direction:column; gap:2px; margin-right:auto}
+  .eyebrow{
+    font-size:10.5px; font-weight:600; letter-spacing:.14em; text-transform:uppercase;
+    color:var(--accent); font-family:"Archivo",sans-serif;
+  }
+  h1{
+    font-family:"Archivo", system-ui, sans-serif; font-weight:700; font-size:21px;
+    margin:0; letter-spacing:-.015em; text-wrap:balance;
+  }
+  .period{font-size:12.5px; color:var(--ink-2)}
+  .period b{color:var(--ink); font-weight:600}
+
+  .field{display:flex; flex-direction:column; gap:5px; min-width:0}
+  .field > label{
+    font-size:10.5px; font-weight:600; letter-spacing:.1em; text-transform:uppercase;
+    color:var(--ink-3); font-family:"Archivo",sans-serif;
+  }
+  select, input[type=search]{
+    font-family:inherit; font-size:13.5px; color:var(--ink);
+    background:var(--surface); border:1px solid var(--line-2); border-radius:8px;
+    padding:8px 10px; max-width:100%;
+  }
+  select#vendedor{min-width:270px; font-weight:500}
+  input[type=search]{min-width:200px}
+  select:focus-visible, input:focus-visible, button:focus-visible, .row-head:focus-visible{
+    outline:2px solid var(--accent); outline-offset:2px;
+  }
+
+  .actions{display:flex; gap:8px; flex-wrap:wrap; position:relative}
+  button{
+    font-family:"Archivo",sans-serif; font-size:13px; font-weight:600;
+    border-radius:8px; padding:9px 14px; cursor:pointer; border:1px solid transparent;
+    display:inline-flex; align-items:center; gap:7px; white-space:nowrap;
+  }
+  .btn-main{background:var(--accent); color:#fff; border-color:var(--accent)}
+  :root[data-theme="dark"] .btn-main, :root:not([data-theme="light"]) .btn-main{color:#08252A}
+  @media (prefers-color-scheme: light){:root:not([data-theme="dark"]) .btn-main{color:#fff}}
+  .btn-main:hover{background:var(--accent-ink); border-color:var(--accent-ink)}
+  .btn-ghost{background:var(--surface); color:var(--ink); border-color:var(--line-2)}
+  .btn-ghost:hover{background:var(--surface-3)}
+  button svg{width:15px; height:15px; flex:none}
+
+  /* ---------- kpis ---------- */
+  .kpis{display:grid; grid-template-columns:repeat(4,1fr); gap:12px; margin-top:22px}
+  .kpi{
+    background:var(--surface); border:1px solid var(--line); border-radius:var(--radius);
+    padding:14px 15px 13px; display:flex; flex-direction:column; gap:3px; box-shadow:var(--shadow);
+    position:relative; overflow:hidden;
+  }
+  .kpi::before{content:""; position:absolute; inset:0 auto 0 0; width:3px; background:var(--line-2)}
+  .kpi.is-good::before{background:var(--good)}
+  .kpi.is-warn::before{background:var(--warn)}
+  .kpi.is-alert::before{background:var(--alert)}
+  .kpi.is-accent::before{background:var(--accent)}
+  .kpi .k-label{font-size:11px; font-weight:600; letter-spacing:.06em; text-transform:uppercase; color:var(--ink-3); font-family:"Archivo",sans-serif}
+  .kpi .k-val{font-family:"Archivo",sans-serif; font-weight:700; font-size:30px; line-height:1.1; letter-spacing:-.02em; font-variant-numeric:tabular-nums}
+  .kpi .k-sub{font-size:12px; color:var(--ink-2)}
+  .kpi .k-sub b{font-variant-numeric:tabular-nums}
+
+  .meter{height:5px; border-radius:99px; background:var(--surface-3); overflow:hidden; margin-top:7px}
+  .meter i{display:block; height:100%; border-radius:99px; background:var(--good)}
+  .meter.warn i{background:var(--warn)}
+
+  /* ---------- filters ---------- */
+  .bar{
+    display:flex; flex-wrap:wrap; gap:10px 14px; align-items:flex-end;
+    margin-top:22px; padding-bottom:12px; border-bottom:1px solid var(--line);
+  }
+  .chips{display:flex; gap:6px; flex-wrap:wrap}
+  .chip{
+    background:var(--surface); border:1px solid var(--line-2); color:var(--ink-2);
+    font-family:"Archivo",sans-serif; font-size:12.5px; font-weight:600;
+    padding:7px 12px; border-radius:99px; cursor:pointer;
+  }
+  .chip .c-n{font-variant-numeric:tabular-nums; opacity:.65; margin-left:5px}
+  .chip[aria-pressed="true"]{background:var(--accent-soft); border-color:var(--accent); color:var(--accent-ink)}
+  .chip:hover{border-color:var(--accent)}
+  .count{margin-left:auto; font-size:12.5px; color:var(--ink-2); font-variant-numeric:tabular-nums; padding-bottom:6px}
+
+  /* ---------- table ---------- */
+  .table-scroll{overflow-x:auto; margin-top:14px; border:1px solid var(--line); border-radius:var(--radius); background:var(--surface); box-shadow:var(--shadow)}
+  table{border-collapse:collapse; width:100%; min-width:720px}
+  thead th{
+    position:sticky; top:0; z-index:2; background:var(--surface-2);
+    font-family:"Archivo",sans-serif; font-size:10.5px; font-weight:600; letter-spacing:.09em;
+    text-transform:uppercase; color:var(--ink-3); text-align:left;
+    padding:10px 14px; border-bottom:1px solid var(--line);
+  }
+  th.num, td.num{text-align:right; font-variant-numeric:tabular-nums}
+  tbody tr.row-head{border-top:1px solid var(--line); cursor:pointer}
+  tbody tr.row-head:first-child{border-top:none}
+  @media (hover:hover){ tbody tr.row-head:hover{background:var(--surface-2)} }
+  tbody tr.row-head.open{background:var(--surface-2)}
+  td{padding:11px 14px; vertical-align:middle}
+  td.cli{min-width:260px}
+  .cli-nome{font-weight:500; line-height:1.35}
+  .cli-cod{font-size:11.5px; color:var(--ink-3); font-variant-numeric:tabular-nums; letter-spacing:.02em}
+  .skus{font-family:"Archivo",sans-serif; font-weight:700; font-size:17px; font-variant-numeric:tabular-nums}
+  .tag{
+    display:inline-block; font-family:"Archivo",sans-serif; font-size:11px; font-weight:600;
+    padding:3px 9px; border-radius:99px; white-space:nowrap;
+  }
+  .tag.t-good{background:var(--good-soft); color:var(--good)}
+  .tag.t-warn{background:var(--warn-soft); color:var(--warn)}
+  .tag.t-alert{background:var(--alert-soft); color:var(--alert)}
+  .grupos{font-size:12px; color:var(--ink-2); line-height:1.45}
+  .caret{color:var(--ink-3); transition:transform .15s ease; display:inline-block}
+  tr.open .caret{transform:rotate(90deg); color:var(--accent)}
+
+  tr.detail > td{padding:0; background:var(--surface-3)}
+  .detail-in{padding:12px 16px 14px 42px; display:grid; grid-template-columns:repeat(auto-fill,minmax(270px,1fr)); gap:12px 20px}
+  .grp h4{
+    margin:0 0 5px; font-family:"Archivo",sans-serif; font-size:10.5px; font-weight:600;
+    letter-spacing:.09em; text-transform:uppercase; color:var(--accent);
+  }
+  .grp ul{margin:0; padding:0; list-style:none; display:flex; flex-direction:column; gap:3px}
+  .grp li{font-size:12.3px; color:var(--ink-2); line-height:1.4; padding-left:11px; position:relative}
+  .grp li::before{content:"–"; position:absolute; left:0; color:var(--ink-3)}
+
+  .empty{padding:40px 20px; text-align:center; color:var(--ink-3); font-size:13.5px}
+  .foot{margin-top:18px; font-size:11.5px; color:var(--ink-3); line-height:1.6}
+
+  .overlay{
+    position:fixed; inset:0; z-index:70; display:flex; align-items:center; justify-content:center;
+    background:rgba(10,20,26,.55); padding:20px;
+  }
+  .ov-card{
+    background:var(--surface); border:1px solid var(--line); border-radius:14px;
+    box-shadow:0 24px 60px -20px rgba(0,0,0,.55); padding:24px; max-width:460px; width:100%;
+  }
+  .ov-card h3{margin:0 0 8px; font-family:"Archivo",sans-serif; font-size:19px; letter-spacing:-.01em}
+  .ov-card p{margin:0 0 6px; font-size:13.5px; color:var(--ink-2); line-height:1.55}
+  .ov-card kbd{
+    font-family:"Archivo",sans-serif; font-size:12px; font-weight:600; background:var(--surface-3);
+    border:1px solid var(--line-2); border-bottom-width:2px; border-radius:5px; padding:2px 7px; color:var(--ink);
+  }
+  .ov-acts{display:flex; gap:8px; flex-wrap:wrap; margin-top:18px}
+  .ov-acts a.btn-main{
+    text-decoration:none; font-family:"Archivo",sans-serif; font-size:13px; font-weight:600;
+    padding:9px 14px; border-radius:8px; display:inline-flex; align-items:center;
+  }
+  .toast{
+    position:fixed; left:50%; transform:translateX(-50%);
+    bottom:calc(20px + env(safe-area-inset-bottom, 0px)); z-index:60;
+    background:var(--ink); color:var(--bg); font-size:13px; font-weight:500;
+    padding:10px 16px; border-radius:99px; box-shadow:var(--shadow); max-width:90vw;
+  }
+
+  @media (max-width:860px){
+    .kpis{grid-template-columns:repeat(2,1fr)}
+    select#vendedor{min-width:0; width:100%}
+    .field{flex:1 1 100%}
+    .actions{width:100%}
+    .actions button{flex:1; justify-content:center}
+  }
+
+  /* ---------- celular: a tabela vira lista de cartões ---------- */
+  @media (max-width:700px){
+    body{font-size:15px}
+    header.top{position:static; backdrop-filter:none}
+    .top-in{padding-block:12px 12px; gap:10px}
+    h1{font-size:19px}
+    .eyebrow{font-size:10px}
+    .wrap{padding-block:0 40px}
+    .kpis{gap:9px; margin-top:16px}
+    .kpi{padding:12px 13px}
+    .kpi .k-val{font-size:26px}
+    .kpi .k-label{font-size:10px}
+    .bar{margin-top:18px; gap:12px}
+    .count{margin-left:0; flex:1 1 100%; padding-bottom:0}
+    input[type=search]{width:100%}
+    .chips{width:100%}
+    .chip{flex:1 1 calc(50% - 6px); text-align:center; justify-content:center}
+
+    .table-scroll{
+      overflow-x:visible; border:none; background:transparent; box-shadow:none; margin-top:12px;
+    }
+    table, tbody{display:block; width:100%; min-width:0}
+    thead{display:none}
+    tbody tr.row-head{
+      display:block; position:relative; background:var(--surface);
+      border:1px solid var(--line); border-radius:11px; box-shadow:var(--shadow);
+      padding:13px 15px 14px; margin-bottom:9px;
+    }
+    tbody tr.row-head.open{
+      background:var(--surface); border-color:var(--accent);
+      border-radius:11px 11px 0 0; margin-bottom:0; box-shadow:none;
+    }
+    tbody tr.row-head td{display:block; padding:0; border:none}
+    tbody tr.row-head td.car{position:absolute; right:14px; bottom:11px; font-size:20px; line-height:1}
+    tbody tr.row-head td.cli{min-width:0; padding-right:82px}
+    .cli-nome{font-size:15.5px}
+    tbody tr.row-head td.num{position:absolute; top:12px; right:14px; text-align:right}
+    .skus{font-size:23px; line-height:1}
+    .skus::after{content:" SKUs"; font-size:10.5px; font-weight:600; letter-spacing:.04em}
+    tbody tr.row-head td.sit{margin-top:9px}
+    tbody tr.row-head td.grupos{margin-top:7px; padding-right:38px; font-size:12.5px}
+    tr.detail{
+      display:block; background:var(--surface); border:1px solid var(--accent);
+      border-top:none; border-radius:0 0 11px 11px; margin-bottom:9px;
+    }
+    tr.detail > td{display:block; background:transparent; padding:0}
+    .detail-in{grid-template-columns:1fr; gap:11px; padding:4px 15px 14px}
+    .grp li{font-size:13px}
+    .foot{font-size:12px}
+    .ov-card{padding:20px}
+  }
+  @media (max-width:420px){
+    .kpi .k-val{font-size:23px}
+    .kpi .k-sub{font-size:11.5px}
+  }
+  @media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<header class="top">
+  <div class="top-in">
+    <div class="brand">
+      <span class="eyebrow">Backoffice comercial · Congelados</span>
+      <h1>Cobertura de SKUs por Cliente</h1>
+      <span class="period">Positivação de mix — <b id="periodo">—</b></span>
+    </div>
+    <div class="field">
+      <label for="vendedor">Vendedor / Representante</label>
+      <select id="vendedor"></select>
+    </div>
+    <div class="actions">
+      <button class="btn-ghost" id="btn-xlsx" type="button">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12"/><path d="m7 11 5 5 5-5"/><path d="M4 20h16"/></svg>
+        Baixar Excel
+      </button>
+      <button class="btn-main" id="btn-wpp" type="button">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 11.5a8.5 8.5 0 0 1-12.6 7.4L3 20.5l1.7-5.2A8.5 8.5 0 1 1 21 11.5Z"/></svg>
+        Enviar no WhatsApp
+      </button>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+  <section class="kpis" id="kpis"></section>
+
+  <div class="bar">
+    <div class="field">
+      <label for="busca">Buscar cliente</label>
+      <input type="search" id="busca" placeholder="nome ou código do cliente" autocomplete="off">
+    </div>
+    <div class="field">
+      <label id="lbl-filtro">Faixa de mix</label>
+      <div class="chips" role="group" aria-labelledby="lbl-filtro" id="chips"></div>
+    </div>
+    <span class="count" id="count"></span>
+  </div>
+
+  <div class="table-scroll">
+    <table>
+      <thead>
+        <tr>
+          <th style="width:28px"></th>
+          <th>Cliente</th>
+          <th class="num" style="width:78px">SKUs</th>
+          <th style="width:150px">Situação</th>
+          <th>Grupos comprados</th>
+        </tr>
+      </thead>
+      <tbody id="corpo"></tbody>
+    </table>
+  </div>
+  <p class="empty" id="vazio" hidden>Nenhum cliente encontrado com esse filtro.</p>
+
+  <div class="overlay" id="ov" hidden>
+    <div class="ov-card" role="dialog" aria-modal="true" aria-labelledby="ov-tit">
+      <h3 id="ov-tit">Imagem pronta</h3>
+      <p id="ov-txt"></p>
+      <div class="ov-acts">
+        <a class="btn-main" id="ov-link" target="_blank" rel="noopener">Abrir o WhatsApp</a>
+        <button class="btn-ghost" id="ov-copiar" type="button">Copiar a mensagem</button>
+        <button class="btn-ghost" id="ov-fechar" type="button">Fechar</button>
+      </div>
+    </div>
+  </div>
+
+  <p class="foot">
+    <b>Meta de mix:</b> 3 SKUs distintos por cliente no mês. Clientes com 2 SKUs estão a um item da meta — prioridade de abordagem.<br>
+    Base: faturamento do período por representante, considerando apenas os grupos de congelados monitorados.
+    O Excel e o print trazem somente os clientes com <b>1 e 2 SKUs</b> — os que o vendedor precisa trabalhar para bater a meta.
+  </p>
+</div>
+
+<script>
+const DADOS = {"periodo":"Setembro/2026","grupos":["BATATAS","FILE/ ISCAS DE TILAPIA EMPANADA","MANDIOCA","MASSAS CONGELADAS","PAO DE QUEIJO","POLENTA","PROCESSADOS","SANDUICHE DE HAMBURGUER P/ COMERCIALIZACAO","TILAPIAS","VEGETAIS"],"produtos":["ANEIS DE CEBOLA EMPANADAS CONGELADA PACOTE 1,1 KG CX PP 11 KG (CANCAO ALIMENTOS)","ANEIS DE CEBOLA EMPANADAS CONGELADA PACOTE 1,1 KG CX PP 6,6 KG (CANCAO ALIMENTOS)","BATATA NOISETTE CONG PCT 400 G CX 10 KG","BATATA PALITO CONGELADA 9 X 9 MM PACOTE 1,1 KG CAIXA PP 9,9 KG (CANCAO ALIMENTOS)","BATATA PALITO CONGELADA 9 X 9 MM PACOTE 2 KG CAIXA PP 10 KG (CANCAO ALIMENTOS)","BATATA PALITO CONGELADA 9 X 9 MM PACOTE 400 G CAIXA PP 10 KG (CANCAO ALIMENTOS)","BOLINHO DE FRANGO FUT CHICKEN C/  RECHEIO CREMOSO DE QUEIJO CONG PTC 300 G CX 4,2 KG","BOLINHO DE TILAPIA CONG PCT 300 G CX 4,2 KG","COXINHA DA ASA EMPANADA APIMENTADA PTC 10 X 700 G CX 7 KG","COXINHA DA ASA EMPANADA TRADICIONAL PCT 10 X 700 G CX 7 KG","EMPANADO DE FRANGO (FUT CHICKEN) CONG PCT 1 KG CX 7 KG","EMPANADO DE FRANGO (FUT CHICKEN) CONG PCT 300 G CX 3 KG","EMPANADO DE FRANGO CONG (CHICKEN) PCT 1KG CAIXA PP 7 KG","EMPANADO DE FRANGO CONG (CHICKEN) PCT 300G CAIXA PP 3 KG","EMPANADO DE TILAPIA (SMALL FISH) CONG PCT 400 G CX 3,2 KG","EMPANADO DE TILAPIA CONG (SMALL FISH) PCT 1,5 KG CX 10,5 KG","FILE DE TILAPIA CONGELADA EM PEDACOS PCT IQF 6 KG CX PP 12 KG (CANCAO ALIMENTOS)","FILE DE TILAPIA CONGELADA IQF 400 G CX PP 10,4 KG","FILE DE TILAPIA CONGELADA IQF 800 G CX PP 10,4 (CANCAO ALIMENTOS)","FILEZINHO DE FRANGO EMPANADO CONG PCT 1KG CAIXA PP 7 KG","FILEZINHO DE FRANGO EMPANADO CONG PCT 700 G CX PP 7 KG","LASANHA A BOLONHESA CONG BDJ 600 G CX 7,2 KG","LASANHA DE FRANGO CONG BDJ 600 G CX 7,2 KG","LASANHA QUATRO QUEIJOS CONG BDJ 600 G CX 7,2 KG","MANDIOCA TOLETE CONGELADA PACOTE 1 KG CX PP 12 KG PROD CANCAO","PAO DE QUEIJO TRADICIONAL CONGELADO PACOTE 300 G CX PP 9,6 KG (CANCAO)","PAO DE QUEIJO TRADICIONAL CONGELADO PCT 800 G CX PP 9,6 KG (CANCAO)","PEIXE TEMPERADO EMPANADO CONGELADO (FILE DE TILAPIA) PCT 600 G CX PP 6 KG","PEIXE TEMPERADO EMPANADO CONGELADO (ISCAS DE TILAPIA) PCT 400 G CX PP 3,2 KG","POLENTA PALITO TRADICIONAL CONGELADA PACOTE 1 KG CX PP 10 KG PROD CANCAO","SANDUICHE FUT BURGUER BACON C/ REQUEIJAO CONG PCT 18 X 150 G CX 2,7 KG","SANDUICHE FUT BURGUER C/ MOLHO DE PICLES CONG PCT 18 X 150 G CX 2,7 KG","SANDUICHE FUT BURGUER MAIONESE GRILL CONG PCT 18 X 150 G CX 2,7 KG"],"pg":[9,9,0,0,0,0,6,1,6,6,6,6,6,6,1,1,8,8,8,6,6,3,3,3,2,4,4,1,1,5,7,7,7],"reps":[["A & D REPRESENTACOES COMERCIAIS LTDA",[["01-010928","O. CATANIO & CIA LTDA.",6,[2,3,5,11,13,23]],["01-014334","RORATO E YAMAMOTO LTDA",5,[4,10,12,24,26]],["02-014334","RORATO E YAMAMOTO LTDA",5,[4,12,24,26,29]],["04-014334","RORATO E YAMAMOTO LTDA",5,[4,12,24,26,29]],["06-014334","RORATO E YAMAMOTO LTDA",5,[10,12,20,26,29]],["01-003719","COMERCIO DE GENEROS ALIMENTICIOS SCAA LTDA",4,[1,5,12,29]],["02-005215","F K COMERCIO DE ALIMENTOS E PARTICIPACOES LTDA",3,[5,6,20]],["01-025731","G.S.A. ATACAREJO LTDA.",3,[3,4,26]],["01-006409","IKEDA & HASHIMOTO FOODS LTDA",3,[0,12,19]],["01-007575","KI-GOSTOSO LANCHES LTDA",3,[0,4,12]],["05-014334","RORATO E YAMAMOTO LTDA",3,[10,12,24]],["04-005215","F K COMERCIO DE ALIMENTOS E PARTICIPACOES LTDA",2,[5,26]],["05-005215","F K COMERCIO DE ALIMENTOS E PARTICIPACOES LTDA",2,[6,20]],["02-010928","O. CATANIO & CIA LTDA.",2,[3,5]],["01-015580","WASABI BAR E PETISCARIA LTDA - ME",2,[0,29]],["03-015661","Y. Y. ROVERI LTDA",2,[3,5]],["01-035521","BROSTULIM RESTAURANTE LTDA",1,[12]],["03-005215","F K COMERCIO DE ALIMENTOS E PARTICIPACOES LTDA",1,[11]],["01-026205","GFC FOODS LTDA",1,[24]],["01-007122","JOAO CARLOS DA SILVA - REFEICOES CASEIRAS",1,[19]],["01-036061","JONATAN SCREMIN COMERCIO E DISTRIBUICAO DE FRIOS",1,[12]],["01-018417","R.E. TANABE & CIA. LTDA.",1,[4]],["01-015661","Y. Y. ROVERI LTDA",1,[20]],["02-015661","Y. Y. ROVERI LTDA",1,[3]]]],["ALEXANDRE CONSTANTIN FLORENCIO",[["03-041367","R. PARRO LTDA",15,[1,3,5,6,10,11,12,13,17,18,20,25,26,28,29]],["02-041367","R PARRO LTDA",10,[1,3,5,10,17,18,20,26,27,29]],["01-037610","M G P S SUPERMERCADO LTDA",9,[1,3,5,13,17,19,25,26,29]],["01-041367","R PARRO LTDA",8,[1,5,11,13,17,20,26,28]],["01-001278","ARY FALAVIGNA LTDA",7,[3,5,13,17,25,26,29]],["01-005315","FARDIN & FARDIN LTDA",7,[3,4,5,10,12,20,27]],["01-010160","MIAN & GUELFI LTDA",7,[3,5,13,17,19,25,29]],["01-012782","N RONQUI & CIA LTDA",7,[3,5,10,12,13,19,26]],["01-015234","VALDIR ROSSETTO & CIA LTDA",7,[3,5,13,17,25,26,29]],["01-004652","SUPERMERCADO CARLUCCIO PARAISO LTDA",6,[3,5,13,17,25,26]],["01-005460","FIOR & FIOR LTDA",5,[3,13,17,25,29]],["02-074596","LDA SUPERMERCADO LTDA",5,[3,13,17,25,29]],["01-009600","MERCADO IRMAOS PRADO LTDA",5,[3,13,17,25,29]],["04-041367","R. PARRO LTDA",5,[3,4,21,22,23]],["01-055938","SJ BARREIRA SUPERMERCADOS LTDA",5,[4,12,13,20,21]],["01-000060","A. APARECIDO EGEIA LTDA",4,[3,5,10,11]],["01-003083","CHICARELLI SANTOS LTDA",4,[17,20,27,28]],["01-074596","LDA SUPERMERCADO LTDA",4,[3,13,17,25]],["01-041366","SUPERMERCADO FAMILIAO LTDA",4,[5,13,21,23]],["03-014211","SUPERMERCADO LABASKI LTDA",4,[3,5,13,29]],["01-003991","CUSTODIO FERREIRA E CIA LTDA",3,[3,13,25]],["01-040188","MERCADO ARAUCARIA ARARUNA LTDA",3,[3,13,20]],["01-037826","MERCADO ARAUCARIA LTDA",3,[3,13,20]],["01-038141","PAULO MORENO & IRMAOS LTDA EPP",3,[3,27,29]],["01-012022","RAMIM & SOUZA LTDA",3,[3,13,17]],["01-042765","SUPERMERCADO IRMAOS MAIA LTDA",3,[6,10,28]],["08-001904","VENDRAMINI FILHOS LTDA",3,[10,26,29]],["01-058695","B. GOUVEIA CONSALTER TAMANINI",2,[3,29]],["02-069859","C ALVES DA SILVA SOUZA LTDA",2,[4,20]],["02-003991","CUSTODIO FERREIRA E CIA LTDA",2,[3,13]],["01-006566","IRMAOS BRATTI LTDA",2,[5,26]],["01-006779","J C PARRO & CIA LTDA",2,[3,29]],["02-006779","J C PARRO & CIA LTDA",2,[3,29]],["03-006779","J C PARRO & CIA LTDA",2,[3,29]],["04-006779","J C PARRO & CIA LTDA",2,[3,29]],["06-006779","J C PARRO & CIA LTDA",2,[3,29]],["08-006779","J C PARRO & CIA LTDA",2,[3,29]],["10-006779","J C PARRO & CIA LTDA",2,[3,29]],["01-008723","MARCIEL VENDRAMINI",2,[3,10]],["01-033697","MORAIS E CORREIA SUPERMERCADO LTDA",2,[5,26]],["01-001081","REGINALDO DE SOUZA EVANGELISTA LTDA",2,[3,19]],["02-001904","VENDRAMINI FILHOS LTDA",2,[0,29]],["01-000148","A M FERNANDES & CIA LTDA",1,[3]],["01-059885","A. O. CORDEIRO",1,[12]],["01-041716","ALIMENTICIOS POLPETA LTDA",1,[13]],["01-065510","ANDERSON ANDRE BIONDO - RESTAURANTE",1,[3]],["01-002363","CARMINATTI & JACOMIN LTDA",1,[17]],["01-038249","CASA DE CARNES IVAI LTDA",1,[28]],["01-075521","DIEGO DA SILVA FERNANDES LTDA",1,[11]],["01-004590","E C XAVIER & CIA LTDA",1,[20]],["07-006779","J C PARRO & CIA LTDA",1,[3]],["02-040188","MERCADO ARAUCARIA ARARUNA LTDA",1,[20]],["01-069959","PANIFICADORA SAO FRANCISCO LTDA",1,[3]],["01-024957","R G CAMPANER & CIA. LTDA",1,[12]],["01-023147","RENAN ROMAGNOLI & CIA LTDA.",1,[20]],["01-041717","SABINO & MELO LTDA",1,[11]],["01-041391","SIDNEI APARECIDO CHIARELI & CIA LTDA",1,[20]],["01-044884","VALDINEI ANTONIO PETENASSI MERCADO",1,[5]],["07-001904","VENDRAMINI FILHOS LTDA",1,[10]]]],["ALEXANDRE OSVALDO TICIANEL MAZZER",[["01-070390","LUZ COMERCIO E SERVICOS LTDA",10,[1,4,10,14,20,21,22,23,26,29]],["01-036020","J BALENA & CIA LTDA",8,[3,5,6,11,13,20,21,29]],["01-075204","L F MOLINA LTDA",7,[3,5,9,20,21,22,29]],["01-003719","COMERCIO DE GENEROS ALIMENTICIOS SCAA LTDA",6,[0,1,5,11,12,29]],["01-070391","DOM JANU RESTAURANTE & PIZZARIA LTDA",5,[3,5,10,11,13]],["02-009630","MERCADO KATAYAMA LTDA",5,[13,20,21,25,26]],["01-012178","REGINALDO CAMPOS COMERCIO DE GENEROS ALIMENTICIOS ME",5,[11,13,14,21,22]],["01-074083","ADSILVA SUPERMERCADO LTDA",4,[5,11,13,26]],["01-031538","DISTRIBUIDORA LEAO LTDA",4,[13,21,22,23]],["01-043975","J LUIZ SANTANA HORTIFRUTI E MERCEARIA LTDA",4,[11,13,20,29]],["01-055246","MC COMERCIO LTDA",4,[20,21,22,23]],["01-072500","MERCADO GIGLIOLLI LTDA",4,[3,13,20,26]],["01-021583","VIAES & ABREU LTDA",4,[3,5,13,25]],["02-021583","VIAES & ABREU LTDA",4,[3,5,13,25]],["01-036022","CAMILA GUERRA DE OLIVEIRA LTDA",3,[5,13,25]],["01-003706","COMERCIO DE GENEROS ALIMENTICIOS DEMIM LTDA",3,[11,13,20]],["04-005215","F K COMERCIO DE ALIMENTOS E PARTICIPACOES LTDA",3,[5,20,26]],["01-006868","J MARTUCCI MINIMERCADO LTDA",3,[5,13,25]],["01-038683","LUIS A. RODRIGUES",3,[1,3,20]],["01-037278","MERCADO ITAMARATY CERRO AZUL LTDA",3,[3,18,29]],["01-009840","MERCADO SUPER FACIL LTDA",3,[3,10,26]],["01-037313","MERCEARIA YAMAGUCHI & USSUDA LTDA",3,[3,13,20]],["01-042071","PREDILETO SUPERMERCADOS LTDA",3,[3,5,20]],["01-074018","VERCADINHO LTDA",3,[5,13,17]],["02-015661","Y. Y. ROVERI LTDA",3,[3,5,26]],["03-015661","Y. Y. ROVERI LTDA",3,[3,5,26]],["04-015661","Y. Y. ROVERI LTDA",3,[3,5,26]],["01-061141","ACOUGUE MARTINS & TICIANEL JUNIOR LTDA",2,[13,29]],["01-060088","ANTONIO RODRIGUES GUEDES LTDA",2,[3,13]],["01-013231","BONANZA COMERCIO DE GENEROS ALIMENTICIOS LTDA",2,[13,26]],["01-002250","CAMPOS & MULLER LTDA",2,[25,26]],["01-036021","COMERCIO DE GENEROS ALIMENTICIOS SM LTDA",2,[25,26]],["01-037280","EMPORIO SETE MERCEARIA E CONVENIENCIA LTDA",2,[3,6]],["01-046467","J L C MORGADO MERCADOS LTDA",2,[14,28]],["01-007655","L. S. MARINGA ALIMENTICIOS LTDA",2,[3,11]],["01-037718","M. N. INHESTA & CIA LTDA",2,[13,14]],["01-009630","MERCADO KATAYAMA LTDA",2,[13,21]],["01-010018","MERCEARIA GONCALVES LTDA",2,[13,20]],["01-043681","SUPERMERCADO VIDA LTDA",2,[13,20]],["01-032423","Y R DE CASTILHO LTDA",2,[3,5]],["02-032423","Y R DE CASTILHO LTDA",2,[5,26]],["01-015661","Y. Y. ROVERI LTDA",2,[3,26]],["01-000206","A V MARQUES CARNES",1,[4]],["01-001989","BRASEIRO COMERCIO DE GENEROS ALIMENTICIOS LTDA",1,[3]],["01-003696","COMERCIO DE FRIOS MARTINS LTDA",1,[1]],["01-074307","EDSON GALDINO",1,[13]],["01-005215","F K COMERCIO DE ALIMENTOS E PARTICIPACOES LTDA",1,[5]],["02-005215","F K COMERCIO DE ALIMENTOS E PARTICIPACOES LTDA",1,[11]],["03-005215","F K COMERCIO DE ALIMENTOS E PARTICIPACOES LTDA",1,[20]],["01-071140","FARD FRUTAS LTDA",1,[20]],["01-025731","G.S.A. ATACAREJO LTDA.",1,[26]],["01-035886","GASPARELLO & GASPARELLO LTDA",1,[13]],["01-008859","MARIA DE LOURDES SILVA-LANCHONETE",1,[13]],["01-035084","MNC MARTINS LTDA",1,[29]],["03-010452","MOLICENTER SUPERMERCADO LTDA",1,[17]],["01-053284","SERGIO FABIANO NEIVERTH",1,[26]],["01-071160","SUPERMERCADO GAMA LTDA",1,[26]],["02-043681","SUPERMERCADO VIDA LTDA",1,[20]],["01-014651","SUPERMERCADOS BURCI LTDA",1,[26]]]],["ALEXANDRE RODRIGUES DE ANDRADE",[["01-029986","KAIROS COMERCIO DE ALIMENTOS LTDA",8,[4,5,10,11,12,20,21,26]],["01-005956","MERCADO CONFIANCA LTDA",8,[3,4,5,11,13,21,22,23]],["01-002380","CARREIRA & IRMAOS LTDA",7,[4,11,21,22,24,29,30]],["01-030245","BIGBOM SUPERMERCADOS LTDA",6,[4,5,21,22,23,28]],["01-069213","EVERTON LUCASYNSKI CARLIM",6,[3,5,13,25,26,29]],["01-076559","NARDI E NARDI SUPERMERCADO LTDA",6,[3,18,21,22,23,26]],["01-071797","PALAURO COMERCIO E SERVICOS LTDA",6,[3,12,15,21,22,23]],["01-004101","SUPERMERCADO SANTA MARIA LTDA",6,[3,5,13,25,26,29]],["01-070001","HELIA PADILHA DE BARROS 78617952920",5,[4,10,12,19,21]],["01-010981","OKUMURA E OKUMURA LTDA",5,[3,4,5,10,12]],["01-071709","SABOR DA CASA MINI MERCADO E RESTAURANTE LTDA",5,[0,1,21,22,23]],["01-007333","JOSE PASCHOAL DO PRADO E CIA LTDA",4,[3,10,11,29]],["02-039445","V J PERIN & CIA LTDA",4,[3,25,26,29]],["01-004448","DMB SUPERMERCADO LTDA",3,[6,12,25]],["01-070290","DYOMI DIAS TORTOLA & CIA. LTDA.",3,[21,22,23]],["01-005920","G R F COSTA - DISTRIBUIDORA DE CARNES LTDA",3,[3,13,21]],["01-075348","JESSICA BORGIO  LTDA",3,[5,17,19]],["01-073280","MERCADINHO MJ LTDA",3,[3,12,20]],["01-015286","VANDENEI SOUZA PINTO TIBURCIO",3,[1,4,26]],["01-072247","51.522.918 MATHEUS PRIMAK RENISZ",2,[13,26]],["01-064224","A. DOS SANTOS SABATINI",2,[11,13]],["01-072937","BARRADAS & COSTA LTDA",2,[1,3]],["01-026271","BONIATTI COMERCIO DE ALIMENTOS LTDA",2,[24,29]],["01-069321","D ZANIN",2,[4,10]],["02-004448","DMB SUPERMERCADO LTDA",2,[11,25]],["02-069213","EVERTON LUCASYNSKI CARLIM",2,[25,29]],["01-006369","I RODRIGUES E RODRIGUES LTDA",2,[0,29]],["01-062084","J. SACHUK & CIA. LTDA",2,[3,23]],["01-008535","MICHAEL ZACHYTKO CAVALCANTE LTDA",2,[3,4]],["01-011468","PAVESI & PAVESI LTDA",2,[0,5]],["01-040232","R. BAGLIONI MERCADO LTDA",2,[26,29]],["02-014211","SUPERMERCADO LABASKI LTDA",2,[5,26]],["01-000157","A MARQUES E IRMAOS LTDA",1,[14]],["01-069647","AJM BRUNETTA COMERCIO DE ALIMENTOS LTDA",1,[4]],["02-000642","ALBUQUERQUE & CAMPOS LTDA",1,[4]],["01-000920","CAMPOPLASTIC ATACADO LTDA",1,[0]],["02-029986","KAIROS COMERCIO DE ALIMENTOS EIRELI",1,[21]],["01-075473","PARATI BOM PRECO LTDA",1,[4]],["01-075087","PIZZARIA FORNALHA UBIRATA LTDA",1,[2]],["01-072685","R N DE PAULA SANTOS",1,[4]],["01-041353","R. J. LECHENSKI",1,[20]],["01-074417","RESTAURANTE E MARMITARIA CHURRAS GRILL LTDA",1,[4]],["04-001904","VENDRAMINI FILHOS LTDA",1,[9]],["01-071578","ZENAIDO SARTORI-MERCADO",1,[21]]]],["BOIADEIRO REPRESENTACOES COMERCIAIS LTDA",[["01-013811","SUPERALVO SUPERMERCADO LTDA",9,[3,4,5,10,11,18,21,25,29]],["01-010079","MERCEARIA PROMISSAO LTDA",7,[1,3,5,6,11,13,20]],["09-013811","SUPERALVO SUPERMERCADO LTDA",7,[3,4,5,19,21,23,25]],["06-013811","SUPERALVO SUPERMERCADO LTDA",6,[3,5,19,21,23,25]],["01-061132","ALMEIDA MERCADOS - COMERCIO, DISTRIBUIDORA E IMPORTADORA LTD",5,[4,5,17,20,29]],["07-061132","ALMEIDA MERCADOS - COMERCIO, DISTRIBUIDORA E IMPORTADORA LTD",5,[4,5,20,25,28]],["09-061132","ALMEIDA MERCADOS - COMERCIO, DISTRIBUIDORA E IMPORTADORA LTD",5,[4,13,17,20,25]],["10-061132","ALMEIDA MERCADOS - COMERCIO, DISTRIBUIDORA E IMPORTADORA LTD",5,[2,4,17,25,29]],["01-004104","DAMASCO & DAMASCO LTDA",5,[3,13,17,25,29]],["01-005762","G. E. PISSININI LTDA",5,[3,13,17,25,29]],["01-009182","MENDONCA & SARTORATO LTDA",5,[3,13,17,25,29]],["04-012866","ROSSETTI SUPERMERCADO LTDA",5,[3,13,17,25,29]],["01-012981","S G DAMASCO & CIA LTDA",5,[3,13,17,25,29]],["05-012990","S. L. COMERCIO DE GENEROS ALIMENTICIOS LTDA.",5,[13,14,20,27,29]],["01-013876","SUPERMERCADO ARROYO LTDA",5,[3,13,17,25,29]],["02-013876","SUPERMERCADO ARROYO LTDA",5,[3,13,17,25,29]],["01-014162","SUPERMERCADO J. C. LTDA",5,[3,13,17,25,29]],["02-061132","ALMEIDA MERCADOS - COMERCIO, DISTRIBUIDORA E IMPORTADORA LTD",4,[4,5,17,20]],["12-061132","ALMEIDA MERCADOS - COMERCIO, DISTRIBUIDORA E IMPORTADORA LTD",4,[11,13,25,29]],["01-001264","ARROYO BORO & COLOMBO SUPERMERCADO LTDA",4,[3,13,17,25]],["01-006030","GOMES COMERCIAL DE ALIMENTOS LTDA",4,[3,13,17,25]],["01-004039","JJ SUPERMERCADO LTDA",4,[3,13,17,25]],["01-010586","N C S FURINI & CIA LTDA",4,[3,12,19,26]],["02-012866","ROSSETTI SUPERMERCADO LTDA",4,[3,17,25,29]],["02-013811","SUPERALVO SUPERMERCADO LTDA",4,[3,4,5,19]],["05-061132","ALMEIDA MERCADOS - COMERCIO, DISTRIBUIDORA E IMPORTADORA LTD",3,[4,5,17]],["06-061132","ALMEIDA MERCADOS - COMERCIO, DISTRIBUIDORA E IMPORTADORA LTD",3,[4,20,29]],["01-004605","E J ZANCHETTA & CIA LTDA",3,[1,21,22]],["01-014146","IMPERIA COMERCIAL LTDA",3,[13,27,29]],["02-007011","J. C. C. MIRANDA & CIA. LTDA.",3,[3,13,29]],["03-007011","J. C. C. MIRANDA & CIA. LTDA.",3,[3,13,29]],["01-022745","M DE MEDEIROS SENEFONTE",3,[21,22,23]],["01-012990","S. L. COMERCIO DE GENEROS ALIMENTICIOS LTDA.",3,[13,20,29]],["01-012970","S.B.C. COMERCIAL LTDA.",3,[20,27,29]],["03-013811","SUPERALVO SUPERMERCADO LTDA",3,[5,19,25]],["01-061821","SUPERMERCADO REIS ITAGUAJE LTDA",3,[3,13,17]],["01-062686","USC ZANCHETTA & CIA LTDA",3,[21,22,23]],["03-061132","ALMEIDA MERCADOS - COMERCIO, DISTRIBUIDORA E IMPORTADORA LTD",2,[4,20]],["11-061132","ALMEIDA MERCADOS - COMERCIO, DISTRIBUIDORA E IMPORTADORA LTD",2,[4,17]],["01-070989","E DE LIMA SILVA MERCADINHO",2,[3,21]],["02-005292","FAGOTTE E SANCHES LTDA",2,[11,20]],["01-071768","J A S SCARAMAL & CIA LTDA",2,[12,29]],["03-012866","ROSSETTI SUPERMERCADO LTDA",2,[17,25]],["03-012970","S B C COMERCIAL LTDA",2,[20,29]],["01-071736","SONIA REGINA ALMEIDA - SUPERMERCADOS",2,[4,5]],["03-013850","SUPERMERCADO ALIANCA LTDA",2,[11,17]],["01-075714","64.711.824 ODAIR FERNANDES",1,[7]],["01-065765","A. FERREIRA SILVA - SUPERMERCADO LTDA",1,[21]],["04-061132","ALMEIDA MERCADOS - COMERCIO, DISTRIBUIDORA E IMPORTADORA LTD",1,[17]],["01-022431","BOIADEIRO REPRESENTACOES COMERCIAIS LTDA",1,[29]],["07-002038","BRUXELAS COMERCIO DE ALIMENTOS LTDA",1,[4]],["01-007510","CASA DE CARNES OLIVEIRA E MARTINS LTDA",1,[19]],["01-006750","J A LOPES COMERCIAL DE ALIMENTOS LTDA",1,[32]],["01-007011","J. C. C. MIRANDA & CIA. LTDA.",1,[3]],["01-007919","LANCHONETE TEXACO LTDA",1,[18]],["01-072793","LUIZ ALVES GUIMARAES LTDA",1,[3]],["01-009975","MERCEARIA E ACOUGUE SAO LOURENCO LTDA",1,[19]],["01-070744","MMM RESTAURANTE LTDA",1,[0]],["01-010452","MOLICENTER SUPERMERCADO LTDA",1,[17]],["02-010452","MOLICENTER SUPERMERCADO LTDA",1,[11]],["01-069058","NELINTON JUNIOR INACIO - ALIMENTOS",1,[29]],["01-032972","R G GONCALVES DA SILVA RESTAURANTE",1,[4]],["01-012593","RIDAO & BATISTA COMERCIO VAREJISTA LTDA EPP",1,[4]],["01-012893","ROUXINOL COMERCIAL DE ALIMENTOS LTDA",1,[13]],["16-013126","SANCHES E VECCHIATE LTDA",1,[4]],["01-013721","SUPER COMPRA DISTRIBUIDORA DE ALIMENTOS LTDA",1,[3]],["01-013816","SUPERCENTER COMERCIO ATACADISTA LTDA",1,[3]],["01-013913","SUPERMERCADO BERNINI LTDA",1,[26]],["01-068872","SUPERMERCADO CICONATTO LTDA",1,[12]],["01-008314","SUPERMERCADO COLOMBO LTDA",1,[25]],["01-062915","SUPERMERCADO MONTREAL COMERCIO DE PRODUTOS ALIMENTICIOS LTDA",1,[20]],["01-014687","SUPERMERCADOS QUINELATO LTDA",1,[19]],["01-071771","TREVO GRILL RESTAURANTES LTDA",1,[4]],["01-026309","ZACHEO RESTAURANTE LTDA",1,[4]]]],["FERNANDO HENRIQUE DE FARIAS DOS SANTOS",[["01-025289","LUIZ CARLOS SOBRINHO -ME",4,[3,4,13,21]],["01-048114","ALVES & MATHEUS LTDA",3,[3,12,25]],["01-002173","CABRAL, SANTOS E CIA. LTDA",3,[11,18,21]],["02-006200","H. P. MERCADO LTDA",3,[21,22,23]],["01-003991","CUSTODIO FERREIRA E CIA LTDA",2,[5,26]],["01-005291","FAGO COMERCIO DE ALIMENTOS LTDA",2,[5,26]],["02-005291","FAGO COMERCIO DE ALIMENTOS LTDA",2,[5,26]],["01-074596","LDA SUPERMERCADO LTDA",2,[5,26]],["02-074596","LDA SUPERMERCADO LTDA",2,[5,26]],["01-048115","M VECHIATO MERCADO",2,[21,26]],["01-009600","MERCADO IRMAOS PRADO LTDA",2,[5,26]],["01-012924","RUELES MENDES E RODRIGUES LTDA",2,[5,26]],["01-069082","SUPERMERCADO TRADICAO XAMBRE LTDA",2,[21,23]],["01-027161","ZACHYTKO E ZACHYTKO CAVALCANTE LTDA",2,[3,4]],["01-069900","C R R RODRIGUES",1,[19]],["01-056936","CLEBIN DISTRIBUIDORA DE FRIOS LTDA",1,[5]],["02-003991","CUSTODIO FERREIRA E CIA LTDA",1,[5]],["01-004032","D ITALIA SUPERMERCADO LTDA",1,[4]],["01-006753","J A S FRANCISQUINI ME",1,[20]],["01-069055","M R RIBEIRO - MINIMERCADO",1,[4]],["01-055938","SJ BARREIRA SUPERMERCADOS LTDA",1,[17]],["01-055032","SUPERMERCADO GONCALVES LTDA",1,[20]]]],["JAIME ROBERTO PITTA",[["01-074042","SUPERMERCADO SANTA TEREZA PRUDENTE LTDA",16,[1,3,4,6,11,12,13,17,20,21,22,23,28,29,30,32]],["02-066975","RODRIGUES & MONTINI SUPERMERCADOS LTDA",12,[3,8,10,11,12,13,19,21,22,23,25,28]],["01-001136","SUPERMERCADO CERDEIRA LTDA EM RECUPERACAO JUDICIAL",9,[3,4,5,12,13,21,23,25,26]],["01-075789","67.261.839 LEANDRO AUGUSTO GUEDES LEMOS",5,[1,3,4,7,19]],["01-066971","FRAY E OLIVEIRA MERCEARIA LTDA",4,[3,17,21,25]],["01-011844","QUEIROZ & SOUSA ALIMENTOS LTDA",4,[0,11,12,20]],["01-068464","ADILSON APARECIDO BRITO MIRANDA PIRAPOZINHO",3,[11,13,21]],["01-067835","G. F. DE ANDRADE - MERCADO",3,[3,4,5]],["01-067532","GUSTAVO HENRIQUE MAGALHAES",3,[5,13,17]],["02-013441","SILVA PIRES & PIRES LTDA",3,[17,21,25]],["01-072952","VO LAURA EXPRESSO LTDA",3,[3,4,7]],["01-071139","CASA DE CARNES LOPES DE MARTINOPOLIS LTDA",2,[3,4]],["01-003466","COMERCIAL GATENA LTDA - ME",2,[5,21]],["01-013441","SILVA PIRES & PIRES LTDA",2,[21,25]],["01-009857","MERCADO TERRA NOVA DE PRESIDENTE PRUDENTE LTDA",1,[19]],["02-009857","MERCADO TERRA NOVA DE PRESIDENTE PRUDENTE LTDA",1,[19]],["01-072555","OSVALDO OMOTE & CIA LT",1,[13]]]],["JONATAS WESLEY RODRIGUES DOS SANTOS",[["01-014130","SUPERMERCADO GUGUY LTDA",18,[1,3,4,5,6,10,11,13,17,18,20,21,22,23,25,26,27,29]],["04-014130","SUPERMERCADO GUGUY LTDA",17,[1,3,4,5,6,10,11,13,17,18,20,21,22,23,25,26,29]],["06-014130","SUPERMERCADO GUGUY LTDA",14,[1,3,4,5,10,13,17,18,20,21,22,23,26,27]],["07-014130","SUPERMERCADO GUGUY LTDA",14,[3,4,5,6,10,11,17,18,20,21,22,23,25,26]],["03-014130","SUPERMERCADO GUGUY LTDA",13,[3,4,5,10,11,13,18,20,21,22,23,27,29]],["02-014130","SUPERMERCADO GUGUY LTDA",11,[3,4,5,10,13,17,21,22,23,26,29]],["01-041783","MERCADO ITAMARATY PORTO RICO LTDA",10,[1,3,5,6,10,11,21,22,23,26]],["05-014130","SUPERMERCADO GUGUY LTDA",10,[3,4,5,10,20,21,22,23,26,29]],["01-006293","HIPERMERCADO MARCOSSI LTDA",7,[3,5,13,17,25,26,29]],["01-011197","PANASSI & PANASSI LTDA",7,[3,5,13,17,25,26,29]],["01-013961","SUPERMERCADO CASTELLI LTDA",7,[3,5,13,17,25,26,29]],["01-014463","SUPERMERCADO SANTO ANTONIO DE PLANALTINA DO PARANA LTDA",7,[3,5,13,17,25,26,29]],["01-014515","SUPERMERCADO SMC LTDA",7,[3,5,13,17,25,26,29]],["01-049414","BIBA SUPERMERCADO PORTO RICO LTDA",6,[3,5,13,17,25,26]],["01-003940","CRIPA & FILHO LTDA",6,[3,5,13,25,26,29]],["01-011888","R A R NAVE & RINALDI LTDA",6,[3,5,13,17,25,26]],["01-037178","SOLANGE GOMES TANIGUCHI SUPERMERCADO LTDA",6,[3,5,13,17,26,29]],["09-014130","SUPERMERCADO GUGUY LTDA",5,[3,17,21,26,29]],["01-009141","MAZUCATO & CIA. LTDA.",4,[3,21,26,27]],["02-041783","MERCADO ITAMARATY PORTO RICO LTDA",4,[5,11,21,22]],["01-049416","MAYCON FERNANDES GREGIANINI",3,[3,20,26]],["02-012022","RAMIN & SOUZA LTDA",3,[3,13,17]],["01-004078","13.703.542 DAIANE RAMOS SILVA",2,[19,26]],["01-003079","CHEGAMAIS LOANDA SUPERMERCADOS",2,[13,20]],["02-003079","CHEGAMAIS LOANDA SUPERMERCADOS",2,[13,20]],["03-003079","CHEGAMAIS LOANDA SUPERMERCADOS",2,[13,20]],["04-003079","CHEGAMAIS LOANDA SUPERMERCADOS - LTDA",2,[13,20]],["01-003437","COMERCIAL DE GENEROS ALIMENTICIOS SLAVIERO LTDA",2,[11,29]],["01-003738","COMERCIO DE PRODUTOS ALIMENTICIOS SUPER MIX PESTANA LTDA.",2,[6,11]],["01-004092","DALLMANN SECOS E MOLHADOS LTDA",2,[21,26]],["01-069389","M F COMERCIO DE PRODUTOS ALIMENTICIOS LTDA",2,[11,13]],["01-014429","SUPERMERCADO RINCAO DE PLANALTINA LTDA",2,[20,30]],["01-014630","SUPERMERCADO ZANZARINI LTDA",2,[4,5]],["01-075998","62.932.268 GRACE ANE DE ANDRADE MACHADO",1,[21]],["01-074168","A C B GNOATTO HOTEL LTDA",1,[5]],["01-002780","CASA SANTOS DE PRODUTOS ALIMENTICIOS LTDA",1,[6]],["01-065397","CRISTIANE DE OLIVEIRA SILVA DOS SANTOS LTDA",1,[4]],["01-066172","D R DOS SANTOS LANCHES LTDA",1,[4]],["01-004276","DIAS & MAZZIN LTDA",1,[5]],["01-004534","DUARTE & BALIONI LTDA.",1,[26]],["01-004597","E F GARCIA SUPERMERCADO LTDA",1,[1]],["01-071287","F. MORENO PERES LTDA",1,[11]],["01-006706","J. DALOLIO & DALOLIO LTDA",1,[13]],["01-075129","MERCADO BEMVILLE LTDA",1,[3]],["01-040539","MERCADO SANTO DIA LTDA",1,[17]],["01-014152","SUPERMERCADO IPE DE PARANAVAI LTDA",1,[26]],["01-057687","V. R. VIANA MERCADO",1,[3]]]],["LUIZ HENRIQUE DOS SANTOS SALMASO",[["01-008020","LEJON COMERCIO ATACADISTA DE PRODUTOS ALIMENTICIOS LTDA",6,[4,11,18,21,22,26]],["01-005291","FAGO COMERCIO DE ALIMENTOS LTDA",4,[3,13,25,29]],["02-005291","FAGO COMERCIO DE ALIMENTOS LTDA",4,[3,13,25,29]],["01-006566","IRMAOS BRATTI LTDA",4,[3,13,25,29]],["01-033697","MORAIS E CORREIA SUPERMERCADO LTDA",4,[3,13,25,29]],["01-012924","RUELES MENDES E RODRIGUES LTDA",4,[3,13,25,29]],["01-048114","ALVES & MATHEUS LTDA",2,[3,26]],["01-005460","FIOR & FIOR LTDA",2,[5,26]],["01-063845","MARCIA PIRES DOS PASSOS",2,[4,11]],["01-053165","D BONILHA",1,[4]],["01-036278","EDINALDO BENHOSSI",1,[16]],["01-005107","ESTRELA ATACADO EIRELI",1,[29]],["01-073256","LUCAS NASCIMENTO DE SOUZA",1,[16]],["01-069055","M R RIBEIRO - MINIMERCADO",1,[4]],["01-048115","M VECHIATO MERCADO",1,[19]],["19-010404","MITRA ARQUIDIOCESANA DE MARINGA ARQUIDIOCESE DE MARINGA",1,[4]],["01-010953","OCEANICA COMERCIO DE GENEROS ALIMENTICIOS LTDA.",1,[17]],["02-012924","RUELES MENDES E RODRIGUES LTDA",1,[3]],["01-013170","SANTA MARIA ALIMENTOS LTDA",1,[0]]]],["MAICON DOUGLAS KARPOVICZ",[["01-000250","ACOPAR-COMERCIAL E AGRICOLA LTDA",7,[3,5,13,19,25,26,29]],["01-006876","J. P. BRIZOLA DA SILVA E CIA LTDA",7,[3,5,10,13,20,25,26]],["01-014211","SUPERMERCADO LABASKI LTDA",7,[3,5,13,17,25,26,29]],["01-014723","SUPREMA PLUS SUPERMERCADO LTDA",7,[3,5,13,17,25,26,29]],["01-027728","SHIRLEI APARECIDA DE LIMA LTDA",6,[3,4,5,17,25,28]],["02-006876","J. P. BRIZOLA DA SILVA E CIA LTDA",5,[3,5,17,25,26]],["01-047824","LUIZ APARECIDO DUARTE",5,[3,4,12,28,29]],["01-074509","HELIO JOSE DE DEUS",4,[0,1,4,22]],["01-074517","PAULO MARQUEZINI MENEGAZZO",4,[1,3,4,29]],["01-065013","PESQUEIRO SABBADINI LTDA",4,[1,3,4,29]],["01-064853","RESTAURANTE E ASSADOS RIBAS LTDA",4,[0,1,3,4]],["02-014211","SUPERMERCADO LABASKI LTDA",4,[3,13,25,29]],["02-004289","DIEGO ROMAGNOLI ROMEIRO & CIA LTDA",3,[4,5,21]],["01-008482","M.J. DA FONCECA E BELLO LTDA",3,[3,4,29]],["01-072635","MINIMERCADO IJJ LTDA",3,[19,27,28]],["01-064772","OLIVEIRA & FONTES DE OLIVEIRA LTDA",3,[0,1,29]],["01-047838","D J DE SOUZA SUPERMERCADO",2,[3,4]],["01-074510","DIRCEU MORAES",2,[14,17]],["01-006613","IRONI MACIEL & CIA LTDA",2,[0,29]],["01-069374","J.A. RUFINO GARCIA & CIA LTDA",2,[3,26]],["01-076062","PESQUEIRO DO MARIO LTDA",2,[1,3]],["01-065143","R.P.BOVO-CHEIRO VERDE HORTIFRUTI",2,[5,29]],["01-065523","REGIANE BUENO",2,[3,20]],["01-047995","CASA DE CARNE 3 IRMAOS LTDA",1,[21]],["01-070725","CASA DE CARNE DO TUCA LTDA",1,[3]],["01-058751","COMERCIAL DE SECOS E MOLHADOS REGINA LTDA",1,[19]],["01-074715","DW KRIIGUER LTDA",1,[4]],["01-064790","E. J. ZILIO E CIA LTDA",1,[1]],["01-074624","EDITH HORST 43564097953",1,[4]],["01-061454","ELAINE CASSIMIRO RODRIGUES MACEDO LTDA",1,[20]],["01-064833","ELIELTON C. MARCELINO & CIA LTDA",1,[3]],["01-074512","LEONORA APARECIDA CAMILO DA CRUZ 03297524995",1,[27]],["01-064969","ORLEI PADILHA & CIA. LTDA",1,[20]],["01-011423","PAULO CESAR BRAGANHOLO SUPERMERCADO",1,[21]],["01-048265","SANDRO MORETTE DE ALMEIDA 86961411991",1,[4]],["01-061406","SARGENTIN & ROCHA LTDA",1,[4]],["01-063884","SUPERMERCADO MENEGAZZO LTDA",1,[3]],["01-063885","SUPERMERCADO PONTO CERTO LTDA",1,[4]],["01-064888","SUPREMA SUPERMERCADOS LTDA",1,[21]],["01-046214","TALARICO MESSIAS - LANCHES LTDA",1,[13]],["01-064771","THIAGO LUCAS DA SILVA WOLF MERCADO",1,[13]],["01-015374","VERONICA ESSER MENEGAZZO",1,[11]]]],["MATHEUS AUGUSTO LINJARDI PEREIRA",[["01-073384","MARCO ANTONIO DE S MELLO",7,[3,11,12,13,20,21,22]],["01-005120","SLEMBARSKI SUPERMERCADO LTDA",5,[3,13,17,25,29]],["01-061791","MERCADO NOSSA SENHORA APARECIDA LTDA",4,[6,11,13,20]],["01-017659","R.MARIA DE SOUZA NEVES - MERCADO",4,[10,14,20,26]],["01-003391","COMERCIAL DE ALIMENTOS MACIEL & ISHII LTDA.",3,[21,22,23]],["01-073024","LUCILENE APARECIDA DA SILVA",3,[11,12,13]],["01-073279","MARAFIGO E PEGO LTDA",3,[3,4,5]],["01-064730","NUPRECINHO LTDA",3,[3,14,15]],["02-064730","NUPRECINHO LTDA",3,[3,14,15]],["01-064711","A.T. DE SOUZA SANTOS MERCEARIA LTDA",2,[3,13]],["01-065574","ABE COMERCIO DE PRODUTOS ALIMENTICIOS LTDA",2,[11,13]],["01-073287","CLOVIS MARTINS DOS SANTOS 07461641905",2,[3,20]],["01-070989","E DE LIMA SILVA MERCADINHO",2,[3,21]],["01-066402","E.SILVA ALIMENTOS LTDA",2,[3,21]],["01-065165","ESPETINHO DO GORDINHO LTDA",2,[4,10]],["01-065586","JR RIBEIRO SUPERMERCADO POPULAR LTDA",2,[20,26]],["01-032971","MERCADINHO GATURAMO REI LTDA",2,[19,20]],["01-064729","MERCADO MR. DESCONTO LTDA",2,[14,15]],["02-064729","MERCADO MR. DESCONTO LTDA",2,[14,15]],["01-064740","MINI PRECO LTDA",2,[14,15]],["01-010758","NILDO VITORINO PIRES",2,[12,20]],["01-070843","OFERTAO SUPERMERCADOS LTDA",2,[21,28]],["01-013942","SUPERMERCADO CALIFORNIA LTDA",2,[10,20]],["01-073680","SUPERMERCADO ROYAL LTDA",2,[3,4]],["01-074933","49.885.661 MARIA JOSE BISCAIA SANTOS",1,[19]],["02-000481","ADILSON P. DE SOUZA LTDA.",1,[20]],["01-075641","BARATAO MIX ALIMENTICIOS LTDA",1,[21]],["01-076898","DOUGLAS GODAS DO NASCIMENTO",1,[3]],["01-071760","G. FANELLI MINI MERCADO LTDA",1,[3]],["01-065509","JMJ MENDES CARNES LTDA",1,[29]],["01-074936","LUIZA HELENA P DE O GONCALVES",1,[21]],["01-065285","MALUGUI COMERCIO DE ALIMENTOS LTDA.",1,[13]],["01-071115","MARCIO ROBERTO TOSATTO 02342969929",1,[5]],["01-072033","MERCADO SANTIAGO LTDA",1,[14]],["01-010957","OCOMPRAS PRODUTOS ALIMENTICIOS LTDA",1,[3]],["01-065041","OLIVEIRA E MORATAS LTDA",1,[17]]]],["MAYCON RODRIGO PUPULIN",[["01-012985","S H DE ARAUJO & CIA LTDA",8,[5,6,10,11,12,20,29,32]],["01-074438","REAL LIMA MARIALVA LTDA",7,[3,4,12,13,14,18,26]],["01-072638","M A FELIPE E CIA LTDA",6,[4,5,11,12,20,21]],["01-060264","MERCADINHO BOM PRECO LTDA",6,[4,10,11,20,21,26]],["01-037287","MERCADO ITAMARATY DE MARIALVA LTDA",6,[1,5,11,21,22,29]],["01-037803","MERCADO PAULISTANO LTDA",6,[3,10,12,17,21,26]],["01-073117","REAL LIMA SARANDI LTDA",6,[10,11,12,17,25,29]],["01-002147","C MARQUES & CIA LTDA",5,[3,13,17,25,29]],["01-072711","SRA. DESCONTAO GENEROS ALIMENTICIOS LTDA",5,[5,21,22,23,25]],["01-014217","SUPERMERCADO LEOMARQUES LTDA",5,[3,13,17,25,29]],["01-014672","SUPERMERCADOS J S NICOLA LTDA",5,[3,13,17,25,29]],["01-074287","TALES MERCADO LTDA",5,[4,10,11,13,21]],["01-067749","BRITO E LINO LTDA",4,[5,13,20,21]],["01-027945","DRS SUPERMERCADO LTDA",4,[12,21,22,23]],["01-007548","KAYNAN H. RAMOS SUPERMERCADO",4,[3,13,25,29]],["01-061312","MERCADINHO DA SKINA LTDA",4,[11,14,20,28]],["01-036518","MERCADO VALE AZUL LTDA",4,[3,12,13,21]],["01-073508","MERCEARIA BOM PASTOR LTDA",4,[3,4,5,12]],["01-060265","40.178.041 BEATRIZ CROTI SOARES",3,[5,13,20]],["01-068494","GH SUPERMERCADO LTDA",3,[13,21,23]],["01-006366","I PASTRE MERCADO",3,[3,13,20]],["01-060508","MERCADO KUSUMOTO WELLINGTON XAVIER LTDA",3,[3,11,13]],["01-072605","ROBSON DE OLIVEIRA 05628005908",3,[3,12,32]],["01-065994","SILVA VIANA SUPERMERCADO LTDA",3,[3,5,26]],["01-013616","SOTTI E SOTTI LTDA",3,[21,22,23]],["01-036215","SOUZA E ARAUJO ALIMENTOS EM GERAL LTDA",3,[3,11,22]],["01-072501","29.135.781 CIBELE APARECIDA DA SILVA PEREIRA",2,[11,21]],["01-072568","49.956.879 ELISANGELA DOS SANTOS LOURENCO PIAZENTIN",2,[3,21]],["01-071313","58.687.679 GILSON BARBOZA DOS SANTOS",2,[21,23]],["01-072621","ACB ALIMENTOS LTDA",2,[19,20]],["01-061122","E. F. DOS SANTOS - MINIMERCADO",2,[13,19]],["01-042489","GAS BOA COMPRA LTDA",2,[12,23]],["01-007721","L M DO CARMO SCACCHETI - ME",2,[3,19]],["01-046487","LUIZ CRISTOVAO RODRIGUES JUNIOR",2,[19,27]],["01-039208","MARIA MOIA GASPARELO",2,[3,11]],["01-072592","MERCADO BORGES LTDA",2,[5,12]],["01-062229","MERCADO OLIVEIRA MARIALVA LTDA",2,[11,26]],["01-064003","MERCADO SERV+ 2 LTDA",2,[12,20]],["01-065025","SG COMERCIO DE ALIMENTOS LTDA",2,[11,26]],["01-071114","V V DA SILVA MERCEARIA",2,[3,11]],["01-074082","50.150.794 DAIANE SANTOS DA SILVA",1,[3]],["01-074515","55.864.671 DYANE ALEXANDRA DA SILVA RAVANELI",1,[4]],["01-075093","56.345.942 ROSIMERI DA SILVA PECORARE VIEIRA",1,[12]],["01-072764","63.678.343 WILLIAM FERNANDES SARTORI",1,[5]],["01-074671","B R DOS SANTOS MERCADO LTDA",1,[5]],["01-073127","CASA DE CARNES BENGOZI LTDA",1,[3]],["01-073411","CLAUDECI PEREZ MAIA MERCADO",1,[13]],["01-039207","D RANIERO & CIA LTDA",1,[4]],["01-063060","DUNICO LTDA",1,[3]],["01-021092","E. M. COLLI LTDA",1,[3]],["01-072833","EDSON GOMES DOS SANTOS 00648979903",1,[3]],["01-059998","F R DE LIMA MINIMERCADO",1,[13]],["01-076714","J C LABIGALINI MALTEMPE",1,[26]],["01-037553","J C RAMOS NETO",1,[3]],["01-037500","M. I. DOS SANTOS MIQUELIN - ACOUGUE",1,[20]],["01-072987","MARCIA ALVES DA SILVA 76550184991",1,[13]],["01-037854","MINI MERCADO BIONDO LTDA",1,[3]],["01-072890","RAQUEL APARECIDA DA SILVA PEREIRA 01124660950",1,[11]],["01-014334","RORATO E YAMAMOTO LTDA",1,[29]],["02-014334","RORATO E YAMAMOTO LTDA",1,[10]],["01-060036","SABOR BRASIL SARANDI LTDA",1,[3]],["01-015161","V A GODOY BRAGA ME",1,[21]]]],["OCTAVIO AUGUSTO LONGO",[["01-071960","MERCADO DIAS MARTINS LTDA",6,[3,4,5,11,20,21]],["01-072617","EDMILSON CESAR CUSTODIO",4,[11,13,14,20]],["01-037069","ELIO ALVES PEREIRA",4,[5,6,11,13]],["01-072835","GIGUI MERCADO E PADARIA LTDA",4,[11,13,14,26]],["01-072601","M L COM DE GENEROS ALIMENTICIOS LTDA",4,[5,13,26,29]],["01-014645","SUPERMERCADOS BAZA LTDA",4,[5,14,18,20]],["02-014645","SUPERMERCADOS BAZA LTDA",4,[5,14,18,20]],["03-014645","SUPERMERCADOS BAZA LTDA",4,[5,14,18,20]],["01-072706","31.396.168 REGIANE DE FATIMA FERREIRA NONATO DA SILVA",3,[3,11,26]],["01-038216","A R D PEDRO - ME",3,[7,11,20]],["01-074016","ANDORINHA - MERCEARIA LTDA",3,[3,13,14]],["01-071795","APARECIDA KEIKO DE FREITAS SHIMIZU TIVA",3,[11,30,31]],["01-065686","DOCE VIDA COMERCIO DE ALIMENTOS LTDA",3,[3,24,29]],["01-071758","E. P. ALBINO & CIA LTDA",3,[3,12,26]],["01-072290","MARTA HELOISA BUENO ASTUN - BEBIDAS",3,[3,5,20]],["01-071970","MERCADO OLIVEIRA MOREIRA LTDA",3,[3,21,26]],["01-071762","MERCADO ROMA LTDA",3,[3,5,11]],["01-054947","SUPER CARNES COMERCIO ATACADISTA DE CARNES LTDA",3,[3,5,29]],["01-070691","THIAGO JUN MIYAMOTO RESTAURANTE LTDA",3,[0,24,29]],["01-072410","J F PARREIRA MINI MERCADO LTDA",2,[12,14]],["01-037564","MACEDO PADARIA E MERCADO LTDA",2,[3,5]],["01-073914","MAX MINIMERCADO LTDA",2,[3,11]],["01-072976","S.BRAZ DE ABREU MINIMERCADO LTDA",2,[3,11]],["01-074463","66.380.102 GABRIELLY OLIVEIRA DA SILVA",1,[7]],["01-074477","AERKI FOODS INDUSTRIA LTDA",1,[3]],["01-073865","EMILIA APARECIDA PONCE DA CUNHA - MINI MERCADO",1,[3]],["01-072293","J MOURA SOARES RESTAURANTE LTDA",1,[0]],["01-073167","M PARREIRA BARBOSA - MINI MERCADO",1,[13]],["01-071957","MERCADINHO CAMPEAO LTDA",1,[20]],["01-071853","MERCADO CARNASCIALLI LTDA",1,[30]],["01-073864","MINI-MERCADO MM LTDA",1,[13]],["01-071876","MINIMERCADO PARREIRA LTDA",1,[5]],["01-072076","POLIANA CAROLINA DE AGUIRRA - COMERCIO DE ALIMENTOS",1,[19]],["01-073003","S B CONVENIENCIA E ALIMENTOS LTDA",1,[5]]]],["PEDRO HENRIQUE DA COSTA LEONEL",[["02-006575","IRMAOS DALAQUA & CIA LTDA",11,[1,3,5,11,13,20,21,22,23,24,29]],["01-006575","IRMAOS DALAQUA & CIA LTDA",9,[5,12,13,20,21,22,23,24,29]],["01-074879","L AMARO DE OLIVEIRA LTDA",8,[3,4,13,18,21,22,23,26]],["04-074879","L AMARO DE OLIVEIRA LTDA",7,[4,13,18,21,22,23,26]],["05-074879","L AMARO DE OLIVEIRA LTDA",7,[4,13,18,21,22,23,26]],["01-075010","ISAIAS PAULO FURTADO LTDA",5,[4,10,11,13,26]],["01-076022","CASA TUPI LTDA",4,[1,3,12,26]],["01-046556","JCM SUPERMERCADO LTDA",4,[1,24,27,28]],["02-074879","L AMARO DE OLIVEIRA LTDA",4,[18,21,22,23]],["03-074879","L AMARO DE OLIVEIRA LTDA",4,[18,21,22,23]],["01-010456","MOLINIS SUPERMERCADO LTDA",4,[1,24,27,28]],["02-010456","MOLINIS SUPERMERCADO LTDA",4,[1,24,27,28]],["03-010456","MOLINIS SUPERMERCADO LTDA",4,[1,24,27,28]],["04-010456","MOLINIS SUPERMERCADO LTDA",4,[1,24,27,28]],["05-010456","MOLINIS SUPERMERCADO LTDA",4,[1,24,27,28]],["06-010456","MOLINIS SUPERMERCADO LTDA",4,[1,24,27,28]],["07-010456","MOLINIS SUPERMERCADO LTDA",3,[1,24,27]],["08-010456","MOLINIS SUPERMERCADO LTDA",3,[1,24,27]],["01-046555","PAULO SERGIO MOLINI & CIA LTDA",3,[1,24,27]],["01-074627","SUPERMERCADO NAGASSAWA LTDA",3,[5,25,26]],["01-076140","VIZIOLI  ALBUQUERQUE LTDA",3,[5,12,13]],["01-073956","ARRUDA & VICENTE LTDA",2,[3,20]],["01-040995","L DE S MELLO LTDA",1,[20]]]],["SERGIO FABIANO NEIVERTH",[["01-072725","COFFEE BLACK COMERCIO E SERVICOS LTDA",5,[3,4,10,24,29]],["01-070391","DOM JANU RESTAURANTE & PIZZARIA LTDA",5,[2,12,13,15,29]],["01-076485","M&M COMERCIO DE BEBIDAS E BAR LTDA",4,[0,12,24,29]],["01-057375","BRUSTOLIM E RODRIGUES LTDA",3,[19,20,29]],["01-002783","CASA VELHA PIZZARIA LTDA",3,[3,4,29]],["01-069315","FRANGO AMERICANO MARINGA LTDA",3,[4,12,29]],["01-061216","GS SARAIVA RESTAURANTE LTDA",3,[3,4,29]],["01-027141","PANQUECARIA GIRASSOL LTDA",3,[3,4,29]],["02-011566","RECANTO SAO JOSE LTDA",3,[3,4,29]],["01-073348","ROSANGELA VIEIRA RESTAURANTE",3,[1,4,29]],["01-037913","SABOR DA QUERENCIA BUFFET LTDA",3,[3,4,29]],["01-071475","TK BAR E RESTAURANTE LTDA",3,[4,13,24]],["01-074361","52.600.878 WESLEY MOTA GONCALVES",2,[3,24]],["01-067096","AUXILIADORA SOMERA INEIA",2,[1,4]],["01-001803","BICIATO & FARIAS RESTAURANTE LTDA",2,[10,19]],["01-061959","CLUBE DO VOVO",2,[3,28]],["01-074471","DIOFAINES KER NETO RESTAURANTE",2,[11,28]],["01-004680","EDILSON AKIRA HORIE 00449815978",2,[3,4]],["01-004910","EMANUEL COMERCIO DE ALIMENTOS LTDA",2,[3,29]],["01-075228","EXPRESS MARINGA ALIMENTOS LTDA",2,[3,24]],["01-059765","HELLEN BEER LANCHONETE LTDA",2,[3,13]],["01-006280","HIKARI COMERCIO DE MASSAS LTDA",2,[4,7]],["01-071340","LIMAO ROSA RESTAURANTE LTDA",2,[24,29]],["01-029979","P CAMPOS JUNIOR - COMERCIO DE ALIMENTOS - ME",2,[13,30]],["01-037546","SABOR AVENIDA BRASIL RESTAURANTE LTDA",2,[11,29]],["01-073399","A C B GNOATTO & GNOATTO LTDA",1,[5]],["01-001471","B O ALVES BARBOSA LANCHONETE",1,[4]],["01-029980","COUNTRY CLUB DE MARINGA",1,[29]],["01-019012","DANIELA GONCALVES GARCIA RESTAURANTE",1,[3]],["01-063758","DI DOMENICO E RIVA LTDA",1,[29]],["01-073514","DOM 18 CENTRO DE DISTRIBUICAO LTDA",1,[4]],["01-073271","GNOATTO & GNOATTO LTDA",1,[5]],["01-006533","IPS RESTAURANTE LTDA",1,[3]],["01-059542","J H V RODRIGUES RESTAURANTE E CAFE LTDA",1,[29]],["01-007083","JM GARCIA RESTAURANTE LTDA",1,[3]],["01-058861","L B B DE ASSIS LANCHONETE LTDA",1,[11]],["01-007924","LANCHONETE WANDAO LTDA",1,[20]],["01-037633","LUCINEIA FRANCISCO DE SOUZA BRUSTOLIM RESTAURANTE",1,[3]],["01-037887","MAIA & LOUSANO PIZZARIA E COSTELARIA LTDA",1,[4]],["01-044869","QUIOSQUE DO ZE LANCHOENTE E RESTAURANTE LTDA",1,[21]],["01-018417","R.E. TANABE & CIA. LTDA.",1,[3]],["01-071612","REAL BAR LTDA",1,[0]],["01-068682","TATIANI ANDREASSI MAINA - RESTAURANTE ESTACAO SABOR",1,[4]],["01-073401","TENDA HOTEL LTDA",1,[5]],["01-044150","TIAGO CSUCSULY-ME",1,[12]]]],["TIAGO FERNANDO RADIN",[["01-001070","ANTONIO CARLOS DOS SANTOS TEIXEIRA",12,[1,3,4,5,6,11,14,21,22,23,26,29]],["09-014130","SUPERMERCADO GUGUY LTDA",11,[1,3,4,10,18,20,21,22,23,26,29]],["01-011935","R. J. GAZOLLA LTDA",6,[6,10,12,13,20,29]],["01-012932","RUTH MINALI BRUSTULIN LTDA",6,[3,4,13,20,21,22]],["01-008956","MARINEZ FERREIRA B. MARCONI E CIA LTDA",5,[3,13,17,25,29]],["01-010528","MULATI & MORO LTDA",5,[3,13,17,25,29]],["01-012866","ROSSETTI SUPERMERCADO LTDA",5,[3,13,17,25,29]],["01-012872","ROTEIRO COMERCIO DE PRODUTOS ALIMENTICIOS LTDA",5,[4,5,11,13,26]],["02-013862","SUPERMERCADO ALVES LTDA",5,[3,13,17,25,29]],["01-014307","SUPERMERCADO MORELLI LTDA",5,[3,13,17,25,29]],["01-013239","SUPERMERCADO SAO PEDRO LTDA",5,[3,13,17,25,29]],["01-014709","SUPERNOVA SUPERMERCADOS LTDA",5,[3,13,17,25,29]],["01-000170","A P RONDONI & CIA LTDA",4,[3,13,17,25]],["01-013862","SUPERMERCADO ALVES LTDA",4,[3,13,17,25]],["03-013862","SUPERMERCADO ALVES LTDA",4,[3,13,17,25]],["01-014130","SUPERMERCADO GUGUY LTDA",4,[5,21,22,26]],["02-014709","SUPERNOVA SUPERMERCADOS LTDA",4,[3,13,17,25]],["01-069673","61.244.068 SIMONI POSSIDONIO DE AMORIM",3,[1,3,13]],["01-004724","EDSON DA SILVA - MERCEARIA LTDA",3,[4,21,22]],["01-006370","I ROGELIO & CIA. LTDA",3,[4,20,26]],["01-062185","JACIRA MACHADO FERREIRA 76408540910",3,[3,10,21]],["01-036828","JOSE ALEXANDRE ROSA RESTAURANTE LTDA",3,[1,3,29]],["01-063337","MERCADO SANTO ANTONIO - LOJA 01 LTDA",3,[3,4,5]],["01-010453","MOLINA & MOLINA LTDA",3,[3,18,20]],["01-069923","PAULO HENRIQUE PEREIRA MACHADO",3,[13,20,26]],["01-072966","RESTAURANTE JANGADA V LTDA",3,[0,1,4]],["01-013016","S R FLAUZINO",3,[3,17,26]],["02-035793","SILVA & JANUARIO GENEROS ALIMENTICIOS LTDA",3,[5,13,21]],["01-014357","SUPERMERCADO PAICANDU LTDA",3,[3,12,13]],["01-014556","SUPERMERCADO TENEDINI LTDA",3,[1,3,21]],["01-068120","SUSE GUILHERME BORTOLO 91196035920",3,[4,11,13]],["01-039445","V J PERIN & CIA LTDA",3,[3,13,17]],["01-060619","BAR E MERCEARIA ARIES LTDA",2,[3,17]],["01-049645","BIGOSINSKI & BIGOSINSKI LTDA",2,[3,13]],["01-036442","F. C. CABRAL LTDA",2,[3,29]],["01-008258","FAMILIA MORETTI SUPERMERCADO LTDA",2,[3,26]],["01-005458","FINCO & FINCO LTDA",2,[11,14]],["01-035793","SILVA & JANUARIO GENEROS ALIMENTICIOS LTDA",2,[3,26]],["01-056475","SUPERMERCADO A. ANDRE LTDA",2,[4,20]],["01-066522","V FERRAREZ MINIMERCADO LTDA",2,[13,21]],["01-068413","50.251.536 ROSANA AMORIM ROSA",1,[3]],["01-075764","64.970.811 VALDEMIR VELOSO DA ROSA",1,[13]],["01-000409","ADALBERTO ENUMO",1,[4]],["01-067336","DELIVIO E ALMEIDA COMERCIO DE ALIMENTOS LTDA",1,[12]],["01-004324","DIONISIO DOS SANTOS MERCEARIA",1,[13]],["02-005458","FINCO & FINCO LTDA",1,[14]],["03-005458","FINCO & FINCO LTDA",1,[14]],["01-054670","IZAEL INACIO DA SILVA 17453399904",1,[13]],["01-063197","LANCHONETE AVENIDA MANDAGUACU LTDA",1,[29]],["01-008396","M. R. COMERCIO DE FRIOS LTDA",1,[11]],["01-056483","MARIA JOSE QUEIROZ BARBOSA 51.187.272",1,[26]],["01-057447","PIZZA SHOW LTDA",1,[4]],["01-007120","SUPERMERCADO JOTA K LTDA",1,[4]],["01-014476","SUPERMERCADO SAO MATHEUS LTDA",1,[21]]]],["WILLIAN TESTA",[["01-071843","SUPERMERCADO 88 LTDA",4,[2,3,26,29]],["01-071430","V & V MERCEARIA E COMERCIO DE FRUTAS E VERDURAS LTDA",2,[6,11]],["01-071848","48.385.117 MONICA VIVARELLI BERTOZZI",1,[22]],["01-071779","61.069.807 LEANDRO APARECIDO GOMES FREITAS",1,[12]],["01-074410","ARENA PE VERMELHO LTDA",1,[7]],["02-037366","DEVARA & BEZERRA MERCADO LTDA",1,[20]],["01-064695","MACARIO RESTAURANTE LTDA",1,[20]],["01-037220","MERCADO VALLARINI LTDA",1,[5]],["02-071907","OUTLET BOM PRECO II LTDA",1,[15]],["01-075342","P P SILVA E CIA LTDA",1,[4]],["01-054948","QUIOSQUE 43 - COMERCIO DE BEBIDAS LTDA",1,[29]],["01-072237","RESTAURANTE GURKIEVICZ LTDA",1,[4]],["01-072520","ROYAL FRUTAS COMERCIO VAREJISTA DE MERCADORIAS EM GERAL LTDA",1,[27]]]]]};
+
+const $ = (s) => document.querySelector(s);
+const selVend = $('#vendedor'), corpo = $('#corpo'), chipsEl = $('#chips');
+let filtro = 'todos', busca = '';
+
+/* ---------- monta seletor ---------- */
+$('#periodo').textContent = DADOS.periodo;
+const optTodos = new Option('Todos os vendedores (' + DADOS.reps.length + ')', '-1');
+selVend.add(optTodos);
+DADOS.reps.forEach((r, i) => selVend.add(new Option(nomeBonito(r[0]), String(i))));
+
+function nomeBonito(s){
+  return s.toLowerCase().replace(/\b[a-zà-ú]/g, c => c.toUpperCase())
+          .replace(/\bDe\b|\bDa\b|\bDos\b|\bDas\b|\bE\b/g, m => m.toLowerCase())
+          .replace(/\bLtda\b/i,'Ltda');
+}
+
+/* ---------- dados correntes ---------- */
+function clientesAtuais(){
+  const i = Number(selVend.value);
+  if (i >= 0) return DADOS.reps[i][1].map(c => ({...c, rep: DADOS.reps[i][0]}));
+  const out = [];
+  DADOS.reps.forEach(r => r[1].forEach(c => out.push({...c, rep: r[0]})));
+  return out.sort((a,b) => b[2] - a[2] || a[1].localeCompare(b[1]));
+}
+function faixa(n){ return n >= 3 ? 'meta' : n === 2 ? 'quase' : 'baixo'; }
+function filtra(lista){
+  const q = busca.trim().toLowerCase();
+  return lista.filter(c => {
+    const n = c[2];
+    if (filtro === 'meta' && n < 3) return false;
+    if (filtro === 'quase' && n !== 2) return false;
+    if (filtro === 'baixo' && n > 1) return false;
+    if (q && !(c[1].toLowerCase().includes(q) || c[0].toLowerCase().includes(q))) return false;
+    return true;
+  });
+}
+function gruposDe(c){
+  const set = [];
+  c[3].forEach(p => { const g = DADOS.grupos[DADOS.pg[p]]; if (!set.includes(g)) set.push(g); });
+  return set;
+}
+
+/* ---------- render ---------- */
+function render(){
+  const base = clientesAtuais();
+  const tot = base.length;
+  const m3 = base.filter(c => c[2] >= 3).length;
+  const m2 = base.filter(c => c[2] === 2).length;
+  const m1 = base.filter(c => c[2] <= 1).length;
+  const pct = tot ? Math.round(m3 / tot * 100) : 0;
+  const pct2 = tot ? Math.round((m3 + m2) / tot * 100) : 0;
+
+  $('#kpis').innerHTML = `
+    <div class="kpi is-accent">
+      <span class="k-label">Clientes positivados</span>
+      <span class="k-val">${tot}</span>
+      <span class="k-sub">${Number(selVend.value) >= 0 ? 'na carteira do vendedor' : 'somando todos os vendedores'}</span>
+    </div>
+    <div class="kpi is-good">
+      <span class="k-label">Com 3 SKUs ou mais</span>
+      <span class="k-val">${m3}</span>
+      <span class="k-sub"><b>${pct}%</b> da carteira atingiu a meta</span>
+      <span class="meter"><i style="width:${pct}%"></i></span>
+    </div>
+    <div class="kpi is-warn">
+      <span class="k-label">Com exatamente 2 SKUs</span>
+      <span class="k-val">${m2}</span>
+      <span class="k-sub">falta <b>1 item</b> para a meta</span>
+      <span class="meter warn"><i style="width:${tot ? Math.round(m2/tot*100) : 0}%"></i></span>
+    </div>
+    <div class="kpi is-alert">
+      <span class="k-label">Com apenas 1 SKU</span>
+      <span class="k-val">${m1}</span>
+      <span class="k-sub">cobertura 2+ SKUs: <b>${pct2}%</b></span>
+    </div>`;
+
+  chipsEl.innerHTML = [
+    ['todos','Todos', tot],
+    ['meta','3 SKUs ou mais', m3],
+    ['quase','Exatamente 2 SKUs', m2],
+    ['baixo','Apenas 1 SKU', m1],
+  ].map(([k,l,n]) => `<button type="button" class="chip" data-f="${k}" aria-pressed="${filtro===k}">${l}<span class="c-n">${n}</span></button>`).join('');
+
+  const lista = filtra(base);
+  $('#count').textContent = lista.length + (lista.length === 1 ? ' cliente listado' : ' clientes listados');
+  $('#vazio').hidden = lista.length > 0;
+
+  corpo.innerHTML = lista.map((c, idx) => {
+    const n = c[2], f = faixa(n);
+    const tag = f === 'meta' ? '<span class="tag t-good">Meta atingida</span>'
+              : f === 'quase' ? '<span class="tag t-warn">Falta 1 SKU</span>'
+              : '<span class="tag t-alert">Mix baixo</span>';
+    const gr = gruposDe(c);
+    const porGrupo = {};
+    c[3].forEach(p => { const g = DADOS.grupos[DADOS.pg[p]]; (porGrupo[g] ||= []).push(DADOS.produtos[p]); });
+    const det = Object.keys(porGrupo).sort().map(g => `
+      <div class="grp"><h4>${g}</h4><ul>${porGrupo[g].map(p => `<li>${p}</li>`).join('')}</ul></div>`).join('');
+    return `
+      <tr class="row-head" data-i="${idx}" tabindex="0" role="button" aria-expanded="false">
+        <td class="car"><span class="caret">›</span></td>
+        <td class="cli">
+          <div class="cli-nome">${c[1]}</div>
+          <div class="cli-cod">${c[0]}${Number(selVend.value) < 0 ? ' · ' + nomeBonito(c.rep) : ''}</div>
+        </td>
+        <td class="num"><span class="skus" style="color:var(--${f==='meta'?'good':f==='quase'?'warn':'alert'})">${n}</span></td>
+        <td class="sit">${tag}</td>
+        <td class="grupos">${gr.join(' · ')}</td>
+      </tr>
+      <tr class="detail" hidden><td colspan="5"><div class="detail-in">${det}</div></td></tr>`;
+  }).join('');
+}
+
+/* ---------- interações ---------- */
+selVend.addEventListener('change', render);
+$('#busca').addEventListener('input', e => { busca = e.target.value; render(); });
+chipsEl.addEventListener('click', e => {
+  const b = e.target.closest('.chip'); if (!b) return;
+  filtro = b.dataset.f; render();
+});
+function toggleLinha(tr){
+  const det = tr.nextElementSibling;
+  const open = !tr.classList.contains('open');
+  tr.classList.toggle('open', open);
+  tr.setAttribute('aria-expanded', String(open));
+  det.hidden = !open;
+}
+corpo.addEventListener('click', e => { const tr = e.target.closest('.row-head'); if (tr) toggleLinha(tr); });
+corpo.addEventListener('keydown', e => {
+  if ((e.key === 'Enter' || e.key === ' ') && e.target.classList.contains('row-head')){
+    e.preventDefault(); toggleLinha(e.target);
+  }
+});
+
+/* ---------- exportação ---------- */
+function contexto(){
+  const i = Number(selVend.value);
+  return {
+    vendedor: i >= 0 ? nomeBonito(DADOS.reps[i][0]) : 'Todos os vendedores',
+    lista: filtra(clientesAtuais()),
+  };
+}
+/* clientes de oportunidade: ignoram o chip de faixa, respeitam vendedor + busca */
+function oportunidades(){
+  const q = busca.trim().toLowerCase();
+  const base = clientesAtuais().filter(c => !q || c[1].toLowerCase().includes(q) || c[0].toLowerCase().includes(q));
+  const ord = (a, b) => a[1].localeCompare(b[1]);
+  return {
+    base,
+    c2: base.filter(c => c[2] === 2).sort(ord),
+    c1: base.filter(c => c[2] <= 1).sort(ord),
+    c3: base.filter(c => c[2] >= 3),
+  };
+}
+function nomeArquivo(ext){
+  const { vendedor } = contexto();
+  const slug = vendedor.normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^A-Za-z0-9]+/g,'-').replace(/^-|-$/g,'').slice(0,40);
+  return `Mix-SKUs_${slug}_${DADOS.periodo.replace('/','-')}.${ext}`;
+}
+function linhas(listaIn){
+  const { vendedor } = contexto();
+  const lista = listaIn || contexto().lista;
+  const resumo = [['Vendedor','Código','Cliente','SKUs distintos','Situação','Grupos comprados']];
+  const detalhe = [['Vendedor','Código','Cliente','Grupo','Produto']];
+  lista.forEach(c => {
+    const vend = nomeBonito(c.rep || vendedor);
+    const f = faixa(c[2]);
+    resumo.push([vend, c[0], c[1], c[2], f === 'meta' ? 'Meta atingida (3+)' : f === 'quase' ? 'Falta 1 SKU' : 'Mix baixo', gruposDe(c).join(', ')]);
+    c[3].forEach(p => detalhe.push([vend, c[0], c[1], DADOS.grupos[DADOS.pg[p]], DADOS.produtos[p]]));
+  });
+  return { resumo, detalhe };
+}
+function toast(msg){
+  document.querySelectorAll('.toast').forEach(el => el.remove());
+  const t = document.createElement('div');
+  t.className = 'toast'; t.textContent = msg; t.setAttribute('role','status');
+  document.body.appendChild(t);
+  setTimeout(() => t.remove(), 4200);
+}
+/* salva em qualquer contexto: painel publicado (capability) ou arquivo local (download comum) */
+async function salvarArquivo(filename, data, mime){
+  const dl = window.claude && window.claude.use ? await window.claude.use('downloads') : null;
+  if (dl){
+    try { await dl.save({ filename, data }); return 'ok'; }
+    catch(e){ if (e && e.code === 'declined') return 'cancelado'; }
+  }
+  const blob = data instanceof Blob ? data : new Blob([data], { type: mime });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = filename;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 5000);
+  return 'ok';
+}
+
+/* a planilha traz SEMPRE só os clientes com 1 e 2 SKUs — os que o vendedor precisa buscar */
+async function gerarExcel(){
+  const o = oportunidades();
+  const lista = [...o.c2, ...o.c1];
+  if (!lista.length) return null;
+  const { resumo, detalhe } = linhas(lista);
+  const nome = (ext) => nomeArquivo(ext).replace('.' + ext, '_Oportunidades.' + ext);
+  if (window.XLSX){
+    const wb = XLSX.utils.book_new();
+    const ws1 = XLSX.utils.aoa_to_sheet(resumo);
+    ws1['!cols'] = [{wch:34},{wch:12},{wch:46},{wch:14},{wch:20},{wch:46}];
+    const ws2 = XLSX.utils.aoa_to_sheet(detalhe);
+    ws2['!cols'] = [{wch:34},{wch:12},{wch:46},{wch:22},{wch:60}];
+    XLSX.utils.book_append_sheet(wb, ws1, 'Resumo por cliente');
+    XLSX.utils.book_append_sheet(wb, ws2, 'Detalhe por produto');
+    const buf = XLSX.write(wb, { bookType:'xlsx', type:'array' });
+    return { filename: nome('xlsx'), blob: new Blob([buf], { type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }) };
+  }
+  const csv = resumo.map(r => r.map(v => `"${String(v).replace(/"/g,'""')}"`).join(';')).join('\r\n');
+  return { filename: nome('csv'), blob: new Blob(['﻿' + csv], { type:'text/csv;charset=utf-8' }) };
+}
+
+/* ---------- print do painel (imagem para WhatsApp) ---------- */
+async function gerarPrint(){
+  const { vendedor } = contexto();
+  const P = { tinta:'#13202A', suave:'#5B6D79', fraco:'#8A9BA5', linha:'#DCE4E8',
+              fundo:'#FFFFFF', chapa:'#F3F7F8', teal:'#0E6F78',
+              bom:'#2C7A4E', alerta:'#9E5E12', ruim:'#A33B32' };
+  const W = 1080, pad = 56, linhaH = 46, LIM = 20;
+  const { base, c2, c1, c3 } = oportunidades();
+  const m3 = c3.length, m2 = c2.length, m1 = c1.length;
+  const pct = base.length ? Math.round(m3 / base.length * 100) : 0;
+  const secs = [];
+  if (m2) secs.push(['FALTA 1 SKU  ·  clientes com 2 SKUs', m2, c2.slice(0, LIM), P.alerta]);
+  if (m1) secs.push(['FALTAM 2 SKUs  ·  clientes com 1 SKU', m1, c1.slice(0, LIM), P.ruim]);
+  if (!secs.length) secs.push(['TODOS OS CLIENTES ATINGIRAM A META', 0, [], P.bom]);
+  const H = 432 + secs.reduce((a, s) => a + 85 + s[2].length * linhaH + (s[1] > s[2].length ? 32 : 0), 0);
+
+  const cv = document.createElement('canvas');
+  cv.width = W; cv.height = H;
+  const x = cv.getContext('2d');
+  const F = (p, s, f) => `${p} ${s}px ${f || '"IBM Plex Sans", system-ui, sans-serif'}`;
+  const AR = '"Archivo", system-ui, sans-serif';
+  try { if (document.fonts && document.fonts.ready) await document.fonts.ready; } catch(e){}
+
+  const corta = (t, max, font) => {
+    x.font = font;
+    if (x.measureText(t).width <= max) return t;
+    let s = t;
+    while (s.length > 4 && x.measureText(s + '…').width > max) s = s.slice(0, -1);
+    return s + '…';
+  };
+  const box = (bx, by, bw, bh, r, fill, stroke) => {
+    x.beginPath();
+    if (x.roundRect) x.roundRect(bx, by, bw, bh, r); else x.rect(bx, by, bw, bh);
+    if (fill){ x.fillStyle = fill; x.fill(); }
+    if (stroke){ x.strokeStyle = stroke; x.lineWidth = 1; x.stroke(); }
+  };
+
+  x.fillStyle = P.fundo; x.fillRect(0, 0, W, H);
+  x.fillStyle = P.teal; x.fillRect(0, 0, W, 10);
+
+  let y = 76;
+  x.fillStyle = P.teal; x.font = F('600', 19, AR);
+  x.fillText('COBERTURA DE SKUS · ' + DADOS.periodo.toUpperCase(), pad, y);
+  y += 50;
+  let tSize = 44;
+  x.font = F('700', tSize, AR);
+  while (tSize > 26 && x.measureText(vendedor).width > W - pad * 2){ tSize -= 2; x.font = F('700', tSize, AR); }
+  x.fillStyle = P.tinta;
+  x.fillText(corta(vendedor, W - pad * 2, F('700', tSize, AR)), pad, y);
+  y += 34;
+  x.fillStyle = P.suave; x.font = F('400', 20);
+  x.fillText(`${base.length} clientes positivados · meta de 3 SKUs distintos por cliente`, pad, y);
+
+  y += 44;
+  const tiles = [
+    ['TOTAL DE CLIENTES', base.length, 'positivados no mês', P.teal],
+    ['3 SKUS OU MAIS', m3, pct + '% na meta', P.bom],
+    ['COM 2 SKUS', m2, 'falta 1 item', P.alerta],
+    ['COM 1 SKU', m1, 'faltam 2 itens', P.ruim],
+  ];
+  const tw = (W - pad * 2 - 18 * 3) / 4;
+  tiles.forEach(([lbl, val, sub, cor], i) => {
+    const tx = pad + i * (tw + 18);
+    box(tx, y, tw, 122, 12, P.chapa, P.linha);
+    x.fillStyle = cor; x.fillRect(tx, y + 14, 4, 94);
+    x.fillStyle = P.fraco; x.font = F('600', 14, AR);
+    x.fillText(corta(lbl, tw - 34, F('600', 14, AR)), tx + 18, y + 38);
+    x.fillStyle = cor; x.font = F('700', 42, AR);
+    x.fillText(String(val), tx + 18, y + 84);
+    x.fillStyle = P.suave; x.font = F('400', 15);
+    x.fillText(corta(sub, tw - 34, F('400', 15)), tx + 18, y + 108);
+  });
+
+  y += 122 + 50;
+  secs.forEach(([titulo, total, arr, cor]) => {
+    x.fillStyle = cor; x.fillRect(pad, y - 15, 5, 20);
+    x.fillStyle = P.tinta; x.font = F('600', 20, AR);
+    x.fillText(titulo + (total ? '  (' + total + ')' : ''), pad + 17, y);
+    y += 13;
+    x.strokeStyle = P.linha; x.lineWidth = 1;
+    x.beginPath(); x.moveTo(pad, y + 6); x.lineTo(W - pad, y + 6); x.stroke();
+    y += 30;
+
+    arr.forEach((c, i) => {
+      const ly = y + i * linhaH;
+      if (i % 2 === 0){ x.fillStyle = P.chapa; x.fillRect(pad - 10, ly - 20, W - pad * 2 + 20, linhaH); }
+      box(pad, ly - 13, 46, 30, 8, cor + '22', null);
+      x.fillStyle = cor; x.font = F('700', 19, AR); x.textAlign = 'center';
+      x.fillText(String(c[2]), pad + 23, ly + 8); x.textAlign = 'left';
+      x.fillStyle = P.fraco; x.font = F('400', 15);
+      x.fillText(c[0], pad + 62, ly + 7);
+      x.fillStyle = P.tinta; x.font = F('500', 19);
+      x.fillText(corta(c[1], 400, F('500', 19)), pad + 152, ly + 7);
+      x.fillStyle = P.fraco; x.font = F('400', 16);
+      x.fillText(corta('já compra: ' + gruposDe(c).join(' · '), W - pad - 620, F('400', 16)), 620, ly + 7);
+    });
+    y += arr.length * linhaH + 12;
+    if (total > arr.length){
+      x.fillStyle = P.suave; x.font = F('400', 16);
+      x.fillText(`+ ${total - arr.length} clientes na planilha completa`, pad, y + 16);
+      y += 32;
+    }
+    y += 30;
+  });
+
+  const agora = new Date().toLocaleString('pt-BR', { day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit' });
+  x.fillStyle = P.fraco; x.font = F('400', 15);
+  x.fillText('Painel de Cobertura de SKUs · gerado em ' + agora, pad, H - 32);
+
+  const blob = await new Promise(res => cv.toBlob(res, 'image/png'));
+  return { filename: nomeArquivo('png').replace('.png', '_Oportunidades.png'), blob };
+}
+
+const LIM_MSG = 25;
+function mensagem(comAnexo){
+  const { vendedor } = contexto();
+  const { base, c2, c1, c3 } = oportunidades();
+  const bloco = (titulo, arr) => {
+    if (!arr.length) return [];
+    const mostra = arr.slice(0, LIM_MSG);
+    return ['', `*${titulo} (${arr.length}):*`,
+      ...mostra.map(c => `• ${c[0]} ${c[1]} — ${gruposDe(c).join(', ')}`),
+      arr.length > mostra.length ? `… e mais ${arr.length - mostra.length} clientes no anexo.` : ''];
+  };
+  return [
+    `*Mix de SKUs — ${DADOS.periodo}*`,
+    `Vendedor: ${vendedor}`,
+    `Clientes positivados: ${base.length}  |  Na meta (3+ SKUs): ${c3.length}`,
+    ...bloco('FALTA 1 SKU — clientes com 2 SKUs', c2),
+    ...bloco('FALTAM 2 SKUs — clientes com 1 SKU', c1),
+    comAnexo ? '\n_Segue em anexo o arquivo com a lista completa._' : '',
+  ].filter(Boolean).join('\n');
+}
+
+async function copiarImagem(blob){
+  try{
+    if (!navigator.clipboard || !window.ClipboardItem) return false;
+    await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
+    return true;
+  }catch(e){ return false; }
+}
+/* o navegador consegue anexar arquivo direto no WhatsApp? (celular e apps com compartilhamento nativo) */
+function podeAnexar(){
+  try{
+    return !!(navigator.share && navigator.canShare &&
+      navigator.canShare({ files: [new File([new Blob(['x'])], 'x.png', { type:'image/png' })] }));
+  }catch(e){ return false; }
+}
+
+$('#btn-xlsx').addEventListener('click', async () => {
+  const arq = await gerarExcel();
+  if (!arq){ toast('Nenhum cliente com 1 ou 2 SKUs neste vendedor.'); return; }
+  const r = await salvarArquivo(arq.filename, arq.blob, arq.blob.type);
+  if (r === 'ok') toast(arq.filename.endsWith('.csv')
+    ? 'Sem internet para o .xlsx — exportado em CSV (abre no Excel).'
+    : 'Planilha dos clientes com 1 e 2 SKUs baixada.');
+});
+
+/* ---------- botão único: imagem + mensagem no WhatsApp ---------- */
+const ov = $('#ov');
+function abreOverlay(titulo, html, wa){
+  document.querySelectorAll('.toast').forEach(el => el.remove());
+  $('#ov-tit').textContent = titulo;
+  $('#ov-txt').innerHTML = html;
+  $('#ov-link').href = wa;
+  ov.hidden = false;
+}
+$('#ov-fechar').addEventListener('click', () => { ov.hidden = true; });
+ov.addEventListener('click', e => { if (e.target === ov) ov.hidden = true; });
+document.addEventListener('keydown', e => { if (e.key === 'Escape') ov.hidden = true; });
+$('#ov-copiar').addEventListener('click', async () => {
+  try{ await navigator.clipboard.writeText(mensagem(true)); toast('Mensagem copiada.'); }
+  catch(e){ toast('Não foi possível copiar a mensagem.'); }
+});
+
+$('#btn-wpp').addEventListener('click', async () => {
+  const texto = mensagem(true);
+  const wa = 'https://wa.me/?text=' + encodeURIComponent(texto);
+  toast('Gerando a imagem do painel…');
+  let arq;
+  try{
+    arq = await gerarPrint();
+  }catch(err){ toast('Não foi possível gerar a imagem.'); return; }
+  if (!arq){ toast('Nenhum cliente com 1 ou 2 SKUs neste vendedor.'); return; }
+
+  /* 1) celular / Windows com app: vai imagem + mensagem juntas, direto */
+  if (podeAnexar()){
+    try{
+      await navigator.share({
+        files: [new File([arq.blob], arq.filename, { type:'image/png' })],
+        text: texto,
+      });
+      toast('Enviado com a imagem anexada.');
+      return;
+    }catch(err){
+      if (err && err.name === 'AbortError') return;
+    }
+  }
+
+  /* 2) navegador: imagem na área de transferência + conversa aberta com o texto */
+  const colou = await copiarImagem(arq.blob);
+  if (!colou) await salvarArquivo(arq.filename, arq.blob, 'image/png');
+  const janela = window.open(wa, '_blank');
+  if (janela) { try { janela.opener = null; } catch(e){} }
+  abreOverlay(
+    colou ? 'Imagem copiada' : 'Imagem baixada',
+    colou
+      ? 'A conversa do WhatsApp abriu com a mensagem já escrita. Clique na caixa de texto e pressione <kbd>Ctrl</kbd> + <kbd>V</kbd>: a imagem entra como anexo e a mensagem vira a legenda dela.'
+      : 'A imagem foi salva na pasta Downloads. Abra a conversa e anexe pelo clipe — a mensagem já está escrita na caixa de texto.',
+    wa
+  );
+  if (!janela) $('#ov-tit').textContent = colou ? 'Imagem copiada — abra o WhatsApp' : 'Imagem baixada — abra o WhatsApp';
+});
+
+render();
+</script>
+</body>
+</html>
