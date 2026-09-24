@@ -102,6 +102,18 @@
   .btn-ghost:hover{background:var(--surface-3)}
   button svg{width:15px; height:15px; flex:none}
 
+  .aviso{
+    display:flex; align-items:center; gap:12px; flex-wrap:wrap;
+    margin-top:16px; padding:12px 15px; border-radius:var(--radius);
+    background:var(--accent-soft); border:1px solid var(--accent); color:var(--accent-ink);
+    font-size:13.5px; line-height:1.45;
+  }
+  .aviso svg{width:19px; height:19px; flex:none}
+  .aviso span{flex:1 1 220px}
+  .aviso b{font-variant-numeric:tabular-nums}
+  .btn-refresh svg{transition:transform .5s ease}
+  .btn-refresh.girando svg{transform:rotate(360deg)}
+
   /* ---------- kpis ---------- */
   .kpis{display:grid; grid-template-columns:repeat(4,1fr); gap:12px; margin-top:22px}
   .kpi{
@@ -214,6 +226,8 @@
     .field{flex:1 1 100%}
     .actions{width:100%}
     .actions button{flex:1; justify-content:center}
+    .btn-refresh{flex:0 0 auto!important; padding-inline:12px}
+    .btn-refresh span{display:none}
   }
 
   /* ---------- celular: a tabela vira lista de cartões ---------- */
@@ -291,6 +305,10 @@
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12"/><path d="m7 11 5 5 5-5"/><path d="M4 20h16"/></svg>
         Baixar Excel
       </button>
+      <button class="btn-ghost btn-refresh" id="btn-refresh" type="button" title="Buscar a versão mais recente do painel" aria-label="Atualizar painel">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 11A8 8 0 0 0 6.3 5.7L3 9"/><path d="M3 4v5h5"/><path d="M4 13a8 8 0 0 0 13.7 5.3L21 15"/><path d="M21 20v-5h-5"/></svg>
+        <span>Atualizar</span>
+      </button>
       <button class="btn-main" id="btn-wpp" type="button">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 11.5a8.5 8.5 0 0 1-12.6 7.4L3 20.5l1.7-5.2A8.5 8.5 0 1 1 21 11.5Z"/></svg>
         Enviar no WhatsApp
@@ -300,6 +318,12 @@
 </header>
 
 <div class="wrap">
+  <div class="aviso" id="aviso" hidden role="status">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 8v5"/><path d="M12 16.5h.01"/><circle cx="12" cy="12" r="9"/></svg>
+    <span>Há uma posição mais recente disponível: <b id="aviso-pos"></b>. Você está vendo a de <b id="aviso-atual"></b>.</span>
+    <button class="btn-main" id="btn-aviso" type="button">Atualizar agora</button>
+  </div>
+
   <section class="kpis" id="kpis"></section>
 
   <div class="bar">
@@ -745,6 +769,34 @@ $('#btn-xlsx').addEventListener('click', async () => {
     ? 'Sem internet para o .xlsx — exportado em CSV (abre no Excel).'
     : 'Planilha dos clientes com 1 e 2 SKUs baixada.');
 });
+
+/* ---------- atualização do painel ---------- */
+function recarregar(){
+  location.replace(location.origin + location.pathname + '?v=' + Date.now());
+}
+$('#btn-refresh').addEventListener('click', () => {
+  $('#btn-refresh').classList.add('girando');
+  toast('Buscando a versão mais recente…');
+  setTimeout(recarregar, 350);
+});
+$('#btn-aviso').addEventListener('click', recarregar);
+
+/* compara a posição publicada com a que está aberta, sem usar o cache do navegador */
+async function checarVersao(){
+  if (location.protocol === 'file:') return;
+  try{
+    const r = await fetch(location.pathname + '?check=' + Date.now(), { cache:'no-store' });
+    if (!r.ok) return;
+    const m = (await r.text()).match(/"posicao":"([^"]+)"/);
+    if (m && m[1] && m[1] !== DADOS.posicao){
+      $('#aviso-pos').textContent = m[1];
+      $('#aviso-atual').textContent = DADOS.posicao || '—';
+      $('#aviso').hidden = false;
+    }
+  }catch(e){ /* offline ou sem acesso: segue com o que está carregado */ }
+}
+setTimeout(checarVersao, 1500);
+document.addEventListener('visibilitychange', () => { if (!document.hidden) checarVersao(); });
 
 /* ---------- botão único: imagem + mensagem no WhatsApp ---------- */
 const ov = $('#ov');
